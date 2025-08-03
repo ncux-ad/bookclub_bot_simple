@@ -1,7 +1,7 @@
 """
 @file: config.py
 @description: Конфигурация приложения с валидацией и типизацией
-@dependencies: os, typing
+@dependencies: os, typing, pathlib, utils.env_validator
 @created: 2024-01-15
 """
 
@@ -9,6 +9,7 @@ import os
 from typing import List, Optional
 from dataclasses import dataclass
 from pathlib import Path
+from utils.env_validator import env_validator
 
 
 @dataclass
@@ -49,20 +50,28 @@ class LoggingConfig:
 
 
 class Config:
-    """Основная конфигурация приложения"""
+    """Основная конфигурация приложения с валидацией переменных окружения"""
     
     def __init__(self):
-        self.bot_token = self._get_required_env("BOT_TOKEN")
+        # Валидируем переменные окружения
+        is_valid, validation_result = env_validator.validate_all()
+        
+        if not is_valid:
+            env_validator.print_validation_report(validation_result)
+            raise ValueError("Ошибки в конфигурации переменных окружения")
+        
+        # Инициализируем конфигурацию с валидированными данными
+        self.bot_token = validation_result["bot_token"]
         self.database = DatabaseConfig()
         self.security = SecurityConfig(
-            secret_phrase=self._get_env("SECRET_PHRASE", "bookclub2024"),
-            admin_ids=self._parse_admin_ids()
+            secret_phrase=validation_result["secret_phrase"],
+            admin_ids=validation_result["admin_ids"]
         )
         self.files = FileConfig()
         self.logging = LoggingConfig()
         
-        # Создаем необходимые директории
-        self._create_directories()
+        # Выводим отчет о валидации
+        env_validator.print_validation_report(validation_result)
     
     def _get_required_env(self, key: str) -> str:
         """Получить обязательную переменную окружения"""
@@ -74,17 +83,6 @@ class Config:
     def _get_env(self, key: str, default: str) -> str:
         """Получить переменную окружения с значением по умолчанию"""
         return os.getenv(key, default)
-    
-    def _parse_admin_ids(self) -> List[int]:
-        """Парсинг ID администраторов из переменной окружения"""
-        admin_ids_str = os.getenv("ADMIN_IDS", "")
-        if not admin_ids_str:
-            return []
-        
-        try:
-            return [int(x.strip()) for x in admin_ids_str.split(",") if x.strip()]
-        except ValueError as e:
-            raise ValueError(f"Неверный формат ADMIN_IDS: {e}")
     
     def _create_directories(self) -> None:
         """Создание необходимых директорий"""

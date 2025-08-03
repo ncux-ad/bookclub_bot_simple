@@ -62,3 +62,9 @@ data/events.json
 
 # Конфигурационные файлы с секретами
 config_local.py
+
+# Дополнительные исключения
+*.bak
+*.backup
+*.old
+.cursor/
