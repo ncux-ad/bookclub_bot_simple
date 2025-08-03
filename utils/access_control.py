@@ -65,7 +65,7 @@ def admin_required(func: Callable) -> Callable:
     """
     @wraps(func)
     async def wrapper(message: Message, *args, **kwargs) -> Any:
-        if not config.is_admin(message.from_user.id):
+        if not is_user_admin(message.from_user.id):
             bot_logger.log_security_event(
                 "неавторизованный_доступ", 
                 message.from_user.id, 

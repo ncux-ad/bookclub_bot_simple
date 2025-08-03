@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from config import config
 from utils.data_manager import data_manager
 from utils.logger import bot_logger
-from utils.access_control import admin_required
+from utils.access_control import admin_required, is_user_admin
 from utils.security import security_manager
 from keyboards.inline import create_admin_keyboard
 from services.users import user_service
@@ -67,7 +67,7 @@ async def admin_stats(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -92,7 +92,7 @@ async def admin_stats(callback: CallbackQuery) -> None:
 @router.callback_query(lambda c: c.data == "admin_users")
 async def admin_users(callback: CallbackQuery) -> None:
     """Показать список пользователей"""
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -116,7 +116,7 @@ async def admin_users(callback: CallbackQuery) -> None:
 @router.callback_query(lambda c: c.data == "admin_books")
 async def admin_books(callback: CallbackQuery) -> None:
     """Управление книгами"""
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -140,7 +140,7 @@ async def admin_books(callback: CallbackQuery) -> None:
 @router.callback_query(lambda c: c.data == "admin_events")
 async def admin_events(callback: CallbackQuery) -> None:
     """Управление событиями"""
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -163,7 +163,7 @@ async def admin_events(callback: CallbackQuery) -> None:
 @router.callback_query(lambda c: c.data == "admin_back")
 async def admin_back(callback: CallbackQuery) -> None:
     """Возврат в главное меню администратора"""
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -186,7 +186,7 @@ async def cmd_settag(message: Message) -> None:
     Returns:
         None
     """
-    if not config.is_admin(message.from_user.id):
+    if not is_user_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора!")
         return
     
@@ -290,7 +290,7 @@ async def cmd_stats(message: Message) -> None:
     Returns:
         None
     """
-    if not config.is_admin(message.from_user.id):
+    if not is_user_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора!")
         return
     
@@ -353,7 +353,7 @@ async def cmd_ban(message: Message) -> None:
     Returns:
         None
     """
-    if not config.is_admin(message.from_user.id):
+    if not is_user_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора!")
         return
     
@@ -384,7 +384,7 @@ async def cmd_unban(message: Message) -> None:
     Returns:
         None
     """
-    if not config.is_admin(message.from_user.id):
+    if not is_user_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора!")
         return
     
@@ -415,7 +415,7 @@ async def cmd_userinfo(message: Message) -> None:
     Returns:
         None
     """
-    if not config.is_admin(message.from_user.id):
+    if not is_user_admin(message.from_user.id):
         await message.answer("❌ У вас нет прав администратора!")
         return
     
@@ -611,7 +611,7 @@ async def users_filter_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -752,7 +752,7 @@ async def users_page_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -820,7 +820,7 @@ async def user_detail_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -904,7 +904,7 @@ async def users_filters_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -942,7 +942,7 @@ async def users_search_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -972,7 +972,7 @@ async def users_export_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -1028,7 +1028,7 @@ async def user_ban_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -1097,7 +1097,7 @@ async def user_unban_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -1172,7 +1172,7 @@ async def user_addtag_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -1221,7 +1221,7 @@ async def user_activity_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -1271,7 +1271,7 @@ async def user_roles_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
@@ -1344,7 +1344,7 @@ async def user_setrole_handler(callback: CallbackQuery) -> None:
     Returns:
         None
     """
-    if not config.is_admin(callback.from_user.id):
+    if not is_user_admin(callback.from_user.id):
         await callback.answer("❌ Нет прав!")
         return
     
