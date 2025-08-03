@@ -1,51 +1,64 @@
 """
 @file: main.py
-@description: Главный файл приложения с модульной архитектурой
-@dependencies: aiogram, config, utils, handlers, services
-@created: 2024-01-15
+@description: Главный файл бота
+@dependencies: aiogram, config, utils.logger, handlers
+@created: 2025-01-03
 """
 
-import asyncio
-import logging
+# Загружаем переменные окружения ПЕРЕД всеми импортами
 from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher, types
-from aiogram.fsm.storage.memory import MemoryStorage
-
-# Загружаем переменные окружения
 load_dotenv()
 
+import asyncio
+import sys
+from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
+
 from config import config
-from utils.logger import setup_logging, bot_logger
-from handlers import user_router, admin_router
-from handlers.unknown_handlers import router as unknown_router
+from utils.logger import bot_logger
+from handlers import user_router, admin_router, unknown_router, book_router
 from utils.spam_middleware import SpamProtectionMiddleware
 
-# Глобальные переменные для управления состоянием
+# Глобальные переменные для graceful shutdown
 bot_instance = None
 dp_instance = None
 
 
+async def error_handler(exception: Exception):
+    """Глобальный обработчик ошибок"""
+    bot_logger.logger.error(f"Необработанная ошибка: {exception}")
+    return True
+
+
+async def on_shutdown():
+    """Обработчик завершения работы"""
+    bot_logger.logger.info("🔄 Начинаем graceful shutdown...")
+    
+    try:
+        if bot_instance and not bot_instance.session.closed:
+            await bot_instance.session.close()
+            bot_logger.logger.info("✅ Сессия бота закрыта")
+    except Exception as e:
+        bot_logger.logger.error(f"Ошибка закрытия сессии бота: {e}")
+    
+    try:
+        if dp_instance and not dp_instance.storage.is_closed():
+            await dp_instance.storage.close()
+            bot_logger.logger.info("✅ Storage закрыт")
+    except Exception as e:
+        bot_logger.logger.error(f"Ошибка закрытия storage: {e}")
+    
+    bot_logger.logger.info("✅ Graceful shutdown завершен")
+
+
 async def main() -> None:
-    """
-    Главная функция приложения
-    
-    Инициализирует и запускает бота с полной валидацией конфигурации.
-    Включает настройку логирования, обработку ошибок и graceful shutdown.
-    
-    Returns:
-        None
-    """
-    # Настройка логирования
-    setup_logging(
-        log_file=config.logging.file,
-        log_level=config.logging.level
-    )
+    """Основная функция"""
+    global bot_instance, dp_instance
     
     bot_logger.logger.info("🚀 Запуск BookClub Bot...")
     
     # Инициализация бота и диспетчера
-    global bot_instance, dp_instance
-    bot_instance = Bot(token=config.bot_token)
+    bot_instance = Bot(token=config.bot.token)
     storage = MemoryStorage()
     dp_instance = Dispatcher(storage=storage)
     
@@ -58,90 +71,32 @@ async def main() -> None:
     dp_instance.include_router(admin_router)
     # Затем пользовательские команды
     dp_instance.include_router(user_router)
+    # Затем обработчики книг
+    dp_instance.include_router(book_router)
     # В последнюю очередь обработчик неизвестных команд
     dp_instance.include_router(unknown_router)
     
-    # Обработка ошибок
-    @dp_instance.error()
-    async def error_handler(exception: Exception):
-        """
-        Обработчик ошибок
-        
-        Логирует все ошибки, возникающие в процессе работы бота.
-        
-        Args:
-            exception: Исключение, которое произошло
-            
-        Returns:
-            None
-        """
-        bot_logger.log_error(exception, "ошибка в обработчике")
-        return True
-    
-    # Обработка graceful shutdown
-    async def on_shutdown():
-        """
-        Обработчик graceful shutdown
-        
-        Корректно завершает работу бота, закрывая все соединения
-        и сохраняя состояние.
-        """
-        bot_logger.logger.info("🔄 Начинаем graceful shutdown...")
-        
-        try:
-            # Закрываем сессию бота
-            if bot_instance:
-                try:
-                    if hasattr(bot_instance.session, 'closed') and not bot_instance.session.closed:
-                        await bot_instance.session.close()
-                        bot_logger.logger.info("✅ Сессия бота закрыта")
-                    elif not hasattr(bot_instance.session, 'closed'):
-                        await bot_instance.session.close()
-                        bot_logger.logger.info("✅ Сессия бота закрыта")
-                except Exception as e:
-                    bot_logger.log_error(e, "ошибка при закрытии сессии бота")
-            
-            # Сохраняем состояние storage
-            try:
-                if hasattr(storage, 'is_closed') and not storage.is_closed():
-                    await storage.close()
-                    bot_logger.logger.info("✅ Storage закрыт")
-                elif not hasattr(storage, 'is_closed'):
-                    await storage.close()
-                    bot_logger.logger.info("✅ Storage закрыт")
-            except Exception as e:
-                bot_logger.log_error(e, "ошибка при закрытии storage")
-            
-        except Exception as e:
-            bot_logger.log_error(e, "ошибка при graceful shutdown")
-        finally:
-            bot_logger.logger.info("✅ Graceful shutdown завершен")
-    
-    # Устанавливаем обработчик shutdown
+    # Регистрация обработчиков
+    dp_instance.error.register(error_handler)
     dp_instance.shutdown.register(on_shutdown)
     
+    bot_logger.logger.info("✅ Бот успешно запущен")
+    
     try:
-        bot_logger.logger.info("✅ Бот успешно запущен")
-        
-        # Запускаем polling
-        await dp_instance.start_polling(bot_instance, skip_updates=True)
-        
-    except KeyboardInterrupt:
-        bot_logger.logger.info("⏹️ Получен сигнал прерывания (Ctrl+C)")
-        # Graceful shutdown будет вызван автоматически aiogram
+        await dp_instance.start_polling(bot_instance)
     except asyncio.CancelledError:
-        # Игнорируем CancelledError после graceful shutdown
         pass
     except Exception as e:
-        bot_logger.log_error(e, "критическая ошибка при запуске бота")
+        bot_logger.logger.error(f"Ошибка в main: {e}")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        # Игнорируем KeyboardInterrupt на верхнем уровне
-        pass
+        bot_logger.logger.info("⏹️ Бот остановлен пользователем")
     except asyncio.CancelledError:
-        # Игнорируем CancelledError на верхнем уровне
-        pass 
+        pass
+    except Exception as e:
+        bot_logger.logger.error(f"Критическая ошибка: {e}")
+        sys.exit(1) 

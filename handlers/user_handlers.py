@@ -119,10 +119,10 @@ async def cmd_register(message: Message, state: FSMContext) -> None:
     await message.answer("💡 Подсказка: фраза указана в документации клуба")
     
     # Устанавливаем состояние ожидания фразы
-    await state.set_state(RegistrationStates.waiting_for_phrase)
+    await state.set_state(RegistrationStates.waiting_for_secret_phrase)
 
 
-@router.message(StateFilter(RegistrationStates.waiting_for_phrase))
+@router.message(StateFilter(RegistrationStates.waiting_for_secret_phrase))
 async def process_registration_phrase(message: Message, state: FSMContext) -> None:
     """
     Обработка секретной фразы при регистрации
@@ -238,10 +238,10 @@ async def cmd_search(message: Message, state: FSMContext) -> None:
     await message.answer("💡 Примеры: 'Гарри Поттер', 'Толстой', 'фантастика'")
     
     # Устанавливаем состояние ожидания запроса
-    await state.set_state(BookSearchStates.waiting_for_query)
+    await state.set_state(BookSearchStates.waiting_for_search_query)
 
 
-@router.message(StateFilter(BookSearchStates.waiting_for_query))
+@router.message(StateFilter(BookSearchStates.waiting_for_search_query))
 async def process_search_query(message: Message, state: FSMContext) -> None:
     """
     Обработка поискового запроса

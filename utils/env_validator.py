@@ -24,8 +24,8 @@ class EnvValidator:
             self.errors.append("BOT_TOKEN не установлен")
             return False
         
-        # Проверка формата токена Telegram
-        if not re.match(r'^\d+:[A-Za-z0-9_-]{35}$', token):
+        # Проверка формата токена Telegram (допускаем 30-35 символов после двоеточия)
+        if not re.match(r'^\d+:[A-Za-z0-9_-]{30,35}$', token):
             # Для тестового режима разрешаем пример токена
             if token == "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz":
                 self.warnings.append("BOT_TOKEN использует тестовое значение - замените на реальный токен")

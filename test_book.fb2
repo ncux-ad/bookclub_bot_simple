@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0">
+  <description>
+    <title-info>
+      <genre>sf</genre>
+      <author>
+        <first-name>Иван</first-name>
+        <last-name>Петров</last-name>
+      </author>
+      <book-title>Тестовая книга</book-title>
+      <annotation>
+        <p>Это тестовая книга для демонстрации работы парсера FB2 файлов.</p>
+        <p>Книга содержит описание функционала бота для управления библиотекой.</p>
+      </annotation>
+      <lang>ru</lang>
+      <date>
+        <value>2025-01-03</value>
+      </date>
+    </title-info>
+  </description>
+  <body>
+    <section>
+      <title>
+        <p>Глава 1</p>
+      </title>
+      <p>Это содержимое тестовой книги.</p>
+    </section>
+  </body>
+</FictionBook> 
