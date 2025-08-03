@@ -110,13 +110,24 @@ def is_user_admin(user_id: int) -> bool:
     """
     Проверить, является ли пользователь администратором
     
+    Проверяет как статические админы из config, так и динамические админы по роли
+    
     Args:
         user_id: ID пользователя
         
     Returns:
         bool: True если пользователь админ, False иначе
     """
-    return config.is_admin(user_id)
+    # Проверяем статических админов из config
+    if config.is_admin(user_id):
+        return True
+    
+    # Проверяем динамическую роль из базы данных
+    user_info = user_service.get_user(str(user_id))
+    if user_info and user_info.get('role') == 'admin':
+        return True
+    
+    return False
 
 
 def is_user_moderator(user_id: int) -> bool:
@@ -198,7 +209,7 @@ def get_available_commands(user_id: int) -> list[str]:
             '/users'
         ])
     
-    # Админские команды (только для админов из config)
+    # Админские команды (для статических админов из config и динамических админов по роли)
     if is_admin:
         commands.extend([
             '/admin',

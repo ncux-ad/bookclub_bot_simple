@@ -1360,7 +1360,7 @@ async def user_setrole_handler(callback: CallbackQuery) -> None:
     old_role = user_info.get('role', 'user')
     
     # Проверяем, не пытается ли админ понизить другого админа
-    if old_role == 'admin' and new_role != 'admin' and user_id in config.admin_ids:
+    if old_role == 'admin' and new_role != 'admin' and int(user_id) in config.security.admin_ids:
         await callback.answer("❌ Нельзя изменить роль главного администратора!")
         return
     
