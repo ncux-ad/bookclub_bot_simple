@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from config import config
 from utils.data_manager import data_manager
 from utils.logger import bot_logger
+from utils.access_control import admin_required
+from utils.security import security_manager
 from keyboards.inline import create_admin_keyboard
 from services.users import user_service
 from services.books import book_service
@@ -21,26 +23,7 @@ from services.events import event_service
 router = Router()
 
 
-def admin_required(func):
-    """
-    Декоратор для проверки прав администратора
-    
-    Проверяет, имеет ли пользователь права администратора.
-    Если нет - отправляет сообщение об ошибке и логирует попытку доступа.
-    
-    Args:
-        func: Функция-обработчик для защиты
-        
-    Returns:
-        wrapper: Обернутая функция с проверкой прав
-    """
-    async def wrapper(message: Message, *args, **kwargs):
-        if not config.is_admin(message.from_user.id):
-            bot_logger.log_security_event("неавторизованный_доступ", message.from_user.id, "админская команда")
-            await message.answer("❌ У вас нет прав администратора!")
-            return
-        return await func(message, *args, **kwargs)
-    return wrapper
+
 
 
 @router.message(Command("admin"))
@@ -453,6 +436,62 @@ async def cmd_users(message: Message, **kwargs) -> None:
     """
     
     await message.answer(stats_text, reply_markup=keyboard, parse_mode="HTML")
+
+
+@router.message(Command("spamstats"))
+@admin_required
+async def cmd_spamstats(message: Message) -> None:
+    """
+    Показать статистику защиты от спама
+    
+    Отображает информацию о заблокированных пользователях и их активности.
+    
+    Args:
+        message (Message): Сообщение с командой
+        
+    Returns:
+        None
+    """
+    bot_logger.log_user_action(message.from_user.id, "просмотр статистики спам-защиты")
+    
+    # Получаем всех заблокированных пользователей
+    users = user_service.get_all_users()
+    banned_users = {user_id: user_data for user_id, user_data in users.items() 
+                   if user_data.get('status') == 'banned'}
+    
+    if not banned_users:
+        await message.answer("📊 Нет заблокированных пользователей для отслеживания.")
+        return
+    
+    text = "📊 <b>Статистика защиты от спама:</b>\n\n"
+    
+    total_messages = 0
+    blocked_users = 0
+    
+    for user_id, user_data in banned_users.items():
+        spam_stats = security_manager.get_spam_protection_stats(int(user_id))
+        
+        text += f"👤 <b>Пользователь {user_id}</b>\n"
+        text += f"📝 Имя: {user_data.get('name', 'Не указано')}\n"
+        text += f"📊 Сообщений: {spam_stats['message_count']}\n"
+        
+        if spam_stats['is_blocked']:
+            blocked_users += 1
+            remaining_minutes = spam_stats['remaining_time'] // 60
+            remaining_seconds = spam_stats['remaining_time'] % 60
+            text += f"🚫 Заблокирован еще на {remaining_minutes}м {remaining_seconds}с\n"
+        else:
+            text += "✅ Активен\n"
+        
+        text += "\n"
+        total_messages += spam_stats['message_count']
+    
+    text += f"📈 <b>Общая статистика:</b>\n"
+    text += f"• Заблокированных пользователей: {len(banned_users)}\n"
+    text += f"• Сейчас заблокировано за спам: {blocked_users}\n"
+    text += f"• Всего сообщений от заблокированных: {total_messages}\n"
+    
+    await message.answer(text, parse_mode="HTML")
 
 
 def create_users_filter_keyboard() -> InlineKeyboardMarkup:

@@ -17,6 +17,8 @@ load_dotenv()
 from config import config
 from utils.logger import setup_logging, bot_logger
 from handlers import user_router, admin_router
+from handlers.unknown_handlers import router as unknown_router
+from utils.spam_middleware import SpamProtectionMiddleware
 
 # Глобальные переменные для управления состоянием
 bot_instance = None
@@ -47,9 +49,17 @@ async def main() -> None:
     storage = MemoryStorage()
     dp_instance = Dispatcher(storage=storage)
     
+    # Регистрация middleware для защиты от спама
+    dp_instance.message.middleware(SpamProtectionMiddleware())
+    dp_instance.callback_query.middleware(SpamProtectionMiddleware())
+    
     # Регистрация роутеров
-    dp_instance.include_router(user_router)
+    # Сначала админские команды (более специфичные)
     dp_instance.include_router(admin_router)
+    # Затем пользовательские команды
+    dp_instance.include_router(user_router)
+    # В последнюю очередь обработчик неизвестных команд
+    dp_instance.include_router(unknown_router)
     
     # Обработка ошибок
     @dp_instance.error()

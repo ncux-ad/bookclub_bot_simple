@@ -15,6 +15,7 @@ from config import config
 from utils.data_manager import data_manager
 from utils.security import security_manager
 from utils.logger import bot_logger
+from utils.access_control import active_user_required
 from keyboards.inline import create_books_keyboard, create_book_keyboard, create_back_keyboard
 from services.users import user_service
 from services.books import book_service
@@ -64,6 +65,12 @@ async def cmd_start(message: Message) -> None:
                 f"Привет, {message.from_user.first_name}! 👋\n"
                 "Используйте /help для списка команд"
             )
+        elif status == 'banned':
+            await message.answer(
+                "🚫 Ваш аккаунт заблокирован администратором.\n"
+                "Для разблокировки обратитесь к администратору."
+            )
+            bot_logger.log_security_event("попытка_входа_заблокированного", message.from_user.id)
         else:
             await message.answer(
                 "👋 С возвращением!\n"
@@ -90,9 +97,18 @@ async def cmd_register(message: Message, state: FSMContext) -> None:
     
     # Проверка существования пользователя
     user_info = user_service.get_user(user_id)
-    if user_info and user_info.get('status') == 'active':
-        await message.answer("Вы уже авторизованы!")
-        return
+    if user_info:
+        status = user_info.get('status', 'unknown')
+        if status == 'active':
+            await message.answer("Вы уже авторизованы!")
+            return
+        elif status == 'banned':
+            await message.answer(
+                "🚫 Ваш аккаунт заблокирован администратором.\n"
+                "Для разблокировки обратитесь к администратору."
+            )
+            bot_logger.log_security_event("попытка_регистрации_заблокированного", message.from_user.id)
+            return
     
     # Проверка попыток входа
     if not security_manager.check_login_attempts(message.from_user.id):
@@ -161,6 +177,7 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
 
 
 @router.message(Command("books"))
+@active_user_required
 async def cmd_books(message: Message) -> None:
     """
     Показать список доступных книг
@@ -194,6 +211,7 @@ async def cmd_books(message: Message) -> None:
 
 
 @router.message(Command("search"))
+@active_user_required
 async def cmd_search(message: Message, state: FSMContext) -> None:
     """
     Начать поиск книг
@@ -382,8 +400,7 @@ async def cmd_help(message: Message) -> None:
     """
     Показать справку по командам
     
-    Отображает полный список доступных команд с описанием.
-    Включает команды для пользователей и администраторов.
+    Отображает список доступных команд в зависимости от статуса пользователя.
     
     Args:
         message (Message): Сообщение с командой помощи
@@ -391,38 +408,80 @@ async def cmd_help(message: Message) -> None:
     Returns:
         None
     """
-    help_text = """
-📚 <b>Команды книжного клуба:</b>
-
-/start - Начать работу с ботом
-/register - Авторизация в клубе (пошагово)
-/search - Поиск книг по названию или автору
-/books - Просмотр всей библиотеки
-/schedule - Расписание встреч
-/profile - Ваш профиль
-/cancel - Отменить текущую операцию
-/help - Эта справка
-
-Для администраторов:
-/admin - Панель администратора
-/settag &lt;user_id&gt; &lt;tag&gt; - Установить тег пользователю
-/ban &lt;user_id&gt; - Заблокировать пользователя
-/unban &lt;user_id&gt; - Разблокировать пользователя
-/userinfo &lt;user_id&gt; - Информация о пользователе
-/stats - Расширенная статистика
-    """
+    from utils.access_control import get_available_commands, get_user_status, is_user_admin
     
     bot_logger.log_user_action(message.from_user.id, "запрос справки")
+    
+    user_id = message.from_user.id
+    status = get_user_status(user_id)
+    is_admin = is_user_admin(user_id)
+    available_commands = get_available_commands(user_id)
+    
+    help_text = f"🤖 <b>Доступные команды:</b>\n\n"
+    
+    # Базовые команды для всех
+    help_text += "📋 <b>Базовые команды:</b>\n"
+    help_text += "/start - Начать работу с ботом\n"
+    help_text += "/help - Показать эту справку\n"
+    
+    # Команды для неактивных пользователей
+    if status == 'inactive':
+        help_text += "/register - Регистрация в клубе\n\n"
+        help_text += "💡 <b>Подсказка:</b>\n"
+        help_text += "Используйте /register для активации аккаунта и получения доступа к функциям клуба."
+    
+    # Команды для заблокированных пользователей
+    elif status == 'banned':
+        help_text += "\n🚫 <b>Ваш аккаунт заблокирован</b>\n\n"
+        help_text += "💡 <b>Информация:</b>\n"
+        help_text += "Для разблокировки обратитесь к администратору."
+    
+    # Команды для активных пользователей
+    elif status == 'active':
+        help_text += "\n📚 <b>Команды клуба:</b>\n"
+        help_text += "/profile - Ваш профиль\n"
+        help_text += "/books - Список книг\n"
+        help_text += "/search - Поиск книг\n"
+        help_text += "/schedule - Расписание событий\n"
+        help_text += "/cancel - Отменить текущую операцию\n"
+        
+        help_text += "\n💡 <b>Подсказки:</b>\n"
+        help_text += "• Используйте /search для поиска книг по названию или автору\n"
+        help_text += "• Команда /profile покажет ваш статус и теги\n"
+        
+        # Админские команды
+        if is_admin:
+            help_text += "\n🔧 <b>Административные команды:</b>\n"
+            help_text += "/admin - Панель администратора\n"
+            help_text += "/settag - Установить тег пользователю\n"
+            help_text += "/ban - Заблокировать пользователя\n"
+            help_text += "/unban - Разблокировать пользователя\n"
+            help_text += "/userinfo - Информация о пользователе\n"
+            help_text += "/stats - Статистика клуба\n"
+            help_text += "/users - Список пользователей\n"
+            help_text += "/spamstats - Статистика защиты от спама\n"
+            
+            help_text += "\n🔧 <b>Админские подсказки:</b>\n"
+            help_text += "• Администраторы могут управлять пользователями через /admin\n"
+            help_text += "• Используйте /users для просмотра списка пользователей с фильтрами\n"
+    
+    # Для неизвестных пользователей
+    else:
+        help_text += "/register - Регистрация в клубе\n\n"
+        help_text += "💡 <b>Подсказка:</b>\n"
+        help_text += "Используйте /register для создания аккаунта в клубе."
+    
     await message.answer(help_text, parse_mode="HTML")
 
 
 @router.message(Command("schedule"))
+@active_user_required
 async def cmd_schedule(message: Message) -> None:
     """
     Показать расписание встреч
     
     Отображает список предстоящих встреч книжного клуба.
-    Требует авторизации пользователя.
+    Требует активного статуса пользователя.
     
     Args:
         message (Message): Сообщение с командой
@@ -430,13 +489,6 @@ async def cmd_schedule(message: Message) -> None:
     Returns:
         None
     """
-    user_id = str(message.from_user.id)
-    user_info = user_service.get_user(user_id)
-    
-    if not user_info or user_info.get('status') != 'active':
-        await message.answer("❌ Для доступа к расписанию необходимо авторизоваться!\nИспользуйте /register")
-        return
-    
     events = event_service.get_upcoming_events()
     
     bot_logger.log_user_action(message.from_user.id, "просмотр расписания")
@@ -459,6 +511,7 @@ async def cmd_schedule(message: Message) -> None:
 
 
 @router.message(Command("profile"))
+@active_user_required
 async def cmd_profile(message: Message) -> None:
     """
     Показать профиль пользователя

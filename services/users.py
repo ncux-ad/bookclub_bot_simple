@@ -132,8 +132,13 @@ class UserService:
         if not user:
             return False
         
-        if user.get('status') == 'active':
+        status = user.get('status', 'unknown')
+        if status == 'active':
             return True  # Уже активен
+        
+        if status == 'banned':
+            self.logger.log_security_event("попытка_активации_заблокированного", int(user_id))
+            return False  # Нельзя активировать заблокированного пользователя
         
         return self.update_user(user_id, status="active", activated_at=datetime.now().isoformat())
     

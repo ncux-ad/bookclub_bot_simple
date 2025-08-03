@@ -19,6 +19,7 @@ class SecurityManager:
         self.logger = logging.getLogger(__name__)
         self._login_attempts: Dict[int, Dict[str, Any]] = {}
         self._sessions: Dict[str, Dict[str, Any]] = {}
+        self._spam_protection: Dict[int, Dict[str, Any]] = {}
     
     def hash_password(self, password: str) -> str:
         """Хэширование пароля с солью"""
@@ -151,6 +152,152 @@ class SecurityManager:
         
         if expired_sessions:
             self.logger.info(f"Очищено {len(expired_sessions)} истекших сессий")
+    
+    def check_spam_protection(self, user_id: int, user_status: str = "unknown") -> bool:
+        """
+        Проверка защиты от спама для заблокированных пользователей
+        
+        Args:
+            user_id (int): ID пользователя
+            user_status (str): Статус пользователя
+            
+        Returns:
+            bool: True если сообщение разрешено, False если заблокировано
+        """
+        # Для заблокированных пользователей применяем строгие ограничения
+        if user_status == "banned":
+            return self._check_banned_user_spam(user_id)
+        
+        return True
+    
+    def _check_banned_user_spam(self, user_id: int) -> bool:
+        """
+        Проверка спама для заблокированных пользователей
+        
+        Args:
+            user_id (int): ID пользователя
+            
+        Returns:
+            bool: True если сообщение разрешено, False если заблокировано
+        """
+        now = datetime.now()
+        
+        if user_id not in self._spam_protection:
+            self._spam_protection[user_id] = {
+                'message_count': 0,
+                'first_message': now,
+                'last_message': now,
+                'blocked_until': None
+            }
+        
+        protection = self._spam_protection[user_id]
+        
+        # Проверяем, не заблокирован ли пользователь
+        if protection.get('blocked_until') and now < protection['blocked_until']:
+            remaining = (protection['blocked_until'] - now).seconds
+            self.logger.warning(f"Заблокированный пользователь {user_id} пытается отправить сообщение. Блокировка еще на {remaining} секунд")
+            return False
+        
+        # Сбрасываем блокировку если истекла
+        if protection.get('blocked_until') and now >= protection['blocked_until']:
+            protection['blocked_until'] = None
+            protection['message_count'] = 0
+            protection['first_message'] = now
+        
+        # Ограничения для заблокированных пользователей:
+        # - Максимум 3 сообщения в минуту
+        # - Максимум 10 сообщений в час
+        # - Максимум 30 сообщений в день
+        
+        time_diff = (now - protection['first_message']).total_seconds()
+        
+        # Проверка лимита в минуту
+        if time_diff <= 60:  # В течение минуты
+            if protection['message_count'] >= 3:
+                protection['blocked_until'] = now + timedelta(minutes=5)
+                self.logger.warning(f"Заблокированный пользователь {user_id} превысил лимит сообщений в минуту. Блокировка на 5 минут")
+                return False
+        
+        # Проверка лимита в час
+        elif time_diff <= 3600:  # В течение часа
+            if protection['message_count'] >= 10:
+                protection['blocked_until'] = now + timedelta(hours=1)
+                self.logger.warning(f"Заблокированный пользователь {user_id} превысил лимит сообщений в час. Блокировка на 1 час")
+                return False
+        
+        # Проверка лимита в день
+        elif time_diff <= 86400:  # В течение дня
+            if protection['message_count'] >= 30:
+                protection['blocked_until'] = now + timedelta(hours=6)
+                self.logger.warning(f"Заблокированный пользователь {user_id} превысил лимит сообщений в день. Блокировка на 6 часов")
+                return False
+        
+        # Если прошло больше дня, сбрасываем счетчик
+        else:
+            protection['message_count'] = 0
+            protection['first_message'] = now
+        
+        # Увеличиваем счетчик сообщений
+        protection['message_count'] += 1
+        protection['last_message'] = now
+        
+        return True
+    
+    def record_banned_user_message(self, user_id: int) -> None:
+        """
+        Запись сообщения от заблокированного пользователя
+        
+        Args:
+            user_id (int): ID пользователя
+        """
+        if user_id not in self._spam_protection:
+            self._spam_protection[user_id] = {
+                'message_count': 0,
+                'first_message': datetime.now(),
+                'last_message': datetime.now(),
+                'blocked_until': None
+            }
+        
+        protection = self._spam_protection[user_id]
+        protection['message_count'] += 1
+        protection['last_message'] = datetime.now()
+        
+        self.logger.info(f"Заблокированный пользователь {user_id} отправил сообщение (всего: {protection['message_count']})")
+    
+    def get_spam_protection_stats(self, user_id: int) -> Dict[str, Any]:
+        """
+        Получить статистику защиты от спама для пользователя
+        
+        Args:
+            user_id (int): ID пользователя
+            
+        Returns:
+            Dict[str, Any]: Статистика защиты от спама
+        """
+        if user_id not in self._spam_protection:
+            return {
+                'message_count': 0,
+                'is_blocked': False,
+                'blocked_until': None,
+                'remaining_time': 0
+            }
+        
+        protection = self._spam_protection[user_id]
+        now = datetime.now()
+        
+        is_blocked = False
+        remaining_time = 0
+        
+        if protection.get('blocked_until') and now < protection['blocked_until']:
+            is_blocked = True
+            remaining_time = (protection['blocked_until'] - now).seconds
+        
+        return {
+            'message_count': protection['message_count'],
+            'is_blocked': is_blocked,
+            'blocked_until': protection.get('blocked_until'),
+            'remaining_time': remaining_time
+        }
 
 
 # Создаем глобальный экземпляр менеджера безопасности
