@@ -175,9 +175,10 @@ async def admin_back(callback: CallbackQuery) -> None:
 @router.message(Command("settag"))
 async def cmd_settag(message: Message) -> None:
     """
-    Установить тег пользователю (только для администраторов)
+    Установить тег пользователю
     
     Формат: /settag <user_id> <tag>
+    Пример: /settag 123456789 Модератор
     
     Args:
         message (Message): Сообщение с командой
@@ -189,19 +190,93 @@ async def cmd_settag(message: Message) -> None:
         await message.answer("❌ У вас нет прав администратора!")
         return
     
-    args = message.text.split()
-    if len(args) < 3:
-        await message.answer("❌ Укажите ID пользователя и тег: /settag <user_id> <tag>")
-        return
+    try:
+        # Парсим аргументы команды
+        args = message.text.split()[1:]
+        if len(args) < 2:
+            await message.answer(
+                "❌ Неверный формат команды!\n"
+                "Используйте: /settag <user_id> <tag>\n"
+                "Пример: /settag 123456789 Модератор"
+            )
+            return
+        
+        user_id = args[0]
+        tag = ' '.join(args[1:])
+        
+        # Добавляем тег пользователю
+        if user_service.add_user_tag(user_id, tag):
+            await message.answer(f"✅ Тег '{tag}' успешно добавлен пользователю {user_id}")
+            bot_logger.log_admin_action(message.from_user.id, f"установка тега '{tag}' пользователю {user_id}")
+        else:
+            await message.answer(f"❌ Ошибка при добавлении тега пользователю {user_id}")
+            
+    except Exception as e:
+        await message.answer("❌ Произошла ошибка при выполнении команды")
+        bot_logger.log_error(e, f"settag command error, user: {message.from_user.id}")
+
+
+@router.message(Command("setrole"))
+@admin_required
+async def cmd_setrole(message: Message, **kwargs) -> None:
+    """
+    Установить роль пользователю
     
-    user_id = args[1]
-    tag = args[2]
+    Формат: /setrole <user_id> <role>
+    Доступные роли: user, moderator, admin
+    Пример: /setrole 123456789 moderator
     
-    if user_service.add_user_tag(user_id, tag):
-        bot_logger.log_admin_action(message.from_user.id, f"установка тега '{tag}' пользователю {user_id}")
-        await message.answer(f"✅ Тег '{tag}' установлен пользователю {user_id}")
-    else:
-        await message.answer(f"❌ Ошибка установки тега для пользователя {user_id}")
+    Args:
+        message (Message): Сообщение с командой
+        
+    Returns:
+        None
+    """
+    try:
+        # Парсим аргументы команды
+        args = message.text.split()[1:]
+        if len(args) != 2:
+            await message.answer(
+                "❌ Неверный формат команды!\n"
+                "Используйте: /setrole <user_id> <role>\n"
+                "Доступные роли: user, moderator, admin\n"
+                "Пример: /setrole 123456789 moderator"
+            )
+            return
+        
+        user_id = args[0]
+        role = args[1].lower()
+        
+        # Проверяем валидность роли
+        valid_roles = ['user', 'moderator', 'admin']
+        if role not in valid_roles:
+            await message.answer(
+                f"❌ Неверная роль '{role}'!\n"
+                f"Доступные роли: {', '.join(valid_roles)}"
+            )
+            return
+        
+        # Получаем информацию о пользователе
+        user_info = user_service.get_user(user_id)
+        if not user_info:
+            await message.answer(f"❌ Пользователь с ID {user_id} не найден!")
+            return
+        
+        # Устанавливаем роль
+        if user_service.set_user_role(user_id, role):
+            old_role = user_info.get('role', 'user')
+            await message.answer(
+                f"✅ Роль пользователя {user_id} изменена:\n"
+                f"📝 Имя: {user_info.get('name', 'Неизвестно')}\n"
+                f"🔄 {old_role} → {role}"
+            )
+            bot_logger.log_admin_action(message.from_user.id, f"изменение роли пользователя {user_id} с {old_role} на {role}")
+        else:
+            await message.answer(f"❌ Ошибка при изменении роли пользователя {user_id}")
+            
+    except Exception as e:
+        await message.answer("❌ Произошла ошибка при выполнении команды")
+        bot_logger.log_error(e, f"setrole command error, user: {message.from_user.id}")
 
 
 @router.message(Command("stats"))
@@ -775,6 +850,14 @@ async def user_detail_handler(callback: CallbackQuery) -> None:
         'banned': '🚫'
     }.get(user_info.get('status', 'unknown'), '❓')
     
+    # Получаем роль пользователя
+    role = user_info.get('role', 'user')
+    role_display = {
+        'user': '👤 Пользователь',
+        'moderator': '🛡️ Модератор',
+        'admin': '👑 Администратор'
+    }.get(role, '👤 Пользователь')
+    
     detail_text = f"""
 👤 <b>Детальная информация о пользователе:</b>
 
@@ -783,6 +866,7 @@ async def user_detail_handler(callback: CallbackQuery) -> None:
 📌 Username: {username if username else 'Не указан'}
 📅 Дата регистрации: {user_info.get('registered_at', 'Не указана')}
 📍 Статус: {status_emoji} {user_info.get('status', 'Не указан')}
+🎭 Роль: {role_display}
 🏷️ Теги: {tags_display}
     """
     
@@ -796,10 +880,11 @@ async def user_detail_handler(callback: CallbackQuery) -> None:
             InlineKeyboardButton(text="✅ Разблокировать", callback_data=f"user_unban_{user_id}")
         ],
         [
-            InlineKeyboardButton(text="🏷️ Добавить тег", callback_data=f"user_addtag_{user_id}"),
-            InlineKeyboardButton(text="📊 Активность", callback_data=f"user_activity_{user_id}")
+            InlineKeyboardButton(text="🎭 Роли", callback_data=f"user_roles_{user_id}"),
+            InlineKeyboardButton(text="🏷️ Добавить тег", callback_data=f"user_addtag_{user_id}")
         ],
         [
+            InlineKeyboardButton(text="📊 Активность", callback_data=f"user_activity_{user_id}"),
             InlineKeyboardButton(text="🔙 Назад к списку", callback_data="users_filters")
         ]
     ])
@@ -1147,45 +1232,166 @@ async def user_activity_handler(callback: CallbackQuery) -> None:
         await callback.answer("❌ Пользователь не найден")
         return
     
-    # Формируем информацию об активности
-    registered_at = user_info.get('registered_at', 'Не указана')
-    activated_at = user_info.get('activated_at', 'Не активирован')
-    first_interaction = user_info.get('first_interaction', 'Не указано')
-    
-    # Вычисляем время в системе
-    days_in_system = "Неизвестно"
-    if first_interaction:
-        try:
-            from datetime import datetime
-            first_date = datetime.fromisoformat(first_interaction.replace('Z', '+00:00'))
-            now = datetime.now()
-            delta = now - first_date
-            days_in_system = f"{delta.days} дней"
-        except:
-            days_in_system = "Ошибка расчета"
-    
+    # Здесь можно добавить логику анализа активности
+    # Пока просто показываем базовую информацию
     activity_text = f"""
-📊 <b>Активность пользователя</b>
+📊 <b>Активность пользователя:</b>
 
-👤 Пользователь: {user_info.get('name', 'Не указано')}
+👤 Пользователь: {user_info.get('name', 'Неизвестно')}
 🆔 ID: <code>{user_id}</code>
+📅 Дата регистрации: {user_info.get('registered_at', 'Не указана')}
+📍 Статус: {user_info.get('status', 'Не указан')}
 
-📅 <b>Даты:</b>
-• Первое взаимодействие: {first_interaction}
-• Регистрация: {registered_at}
-• Активация: {activated_at}
-• В системе: {days_in_system}
+📈 <b>Статистика:</b>
+• Первое взаимодействие: {user_info.get('first_interaction', 'Не указано')}
+• Активирован: {user_info.get('activated_at', 'Не активирован')}
 
-📍 <b>Статус:</b> {user_info.get('status', 'Не указан')}
-
-🏷️ <b>Теги:</b> {', '.join(user_info.get('tags', [])) if user_info.get('tags') else 'Не указаны'}
+💡 <b>Примечание:</b>
+Детальная аналитика активности будет добавлена в будущих версиях.
     """
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🔙 Назад к деталям", callback_data=f"user_detail_{user_id}")
+            InlineKeyboardButton(text="🔙 Назад к пользователю", callback_data=f"user_detail_{user_id}")
         ]
     ])
     
     await callback.message.edit_text(activity_text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
-    bot_logger.log_admin_action(callback.from_user.id, f"просмотр активности пользователя {user_id}") 
+    bot_logger.log_admin_action(callback.from_user.id, f"просмотр активности пользователя {user_id}")
+
+
+@router.callback_query(lambda c: c.data.startswith("user_roles_"))
+async def user_roles_handler(callback: CallbackQuery) -> None:
+    """
+    Показать меню управления ролями пользователя
+    
+    Args:
+        callback (CallbackQuery): Callback с ID пользователя
+        
+    Returns:
+        None
+    """
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!")
+        return
+    
+    user_id = callback.data.split("_")[-1]
+    user_info = user_service.get_user(user_id)
+    
+    if not user_info:
+        await callback.answer("❌ Пользователь не найден")
+        return
+    
+    current_role = user_info.get('role', 'user')
+    role_display = {
+        'user': '👤 Пользователь',
+        'moderator': '🛡️ Модератор',
+        'admin': '👑 Администратор'
+    }.get(current_role, '👤 Пользователь')
+    
+    roles_text = f"""
+🎭 <b>Управление ролями</b>
+
+👤 Пользователь: {user_info.get('name', 'Неизвестно')}
+🆔 ID: <code>{user_id}</code>
+🎭 Текущая роль: {role_display}
+
+📋 <b>Доступные роли:</b>
+• 👤 Пользователь - базовые права
+• 🛡️ Модератор - управление пользователями
+• 👑 Администратор - полные права
+
+💡 <b>Выберите новую роль:</b>
+    """
+    
+    # Создаем кнопки для каждой роли
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=f"👤 Пользователь {'✅' if current_role == 'user' else ''}", 
+                callback_data=f"user_setrole_{user_id}_user"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"🛡️ Модератор {'✅' if current_role == 'moderator' else ''}", 
+                callback_data=f"user_setrole_{user_id}_moderator"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"👑 Администратор {'✅' if current_role == 'admin' else ''}", 
+                callback_data=f"user_setrole_{user_id}_admin"
+            )
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Назад к пользователю", callback_data=f"user_detail_{user_id}")
+        ]
+    ])
+    
+    await callback.message.edit_text(roles_text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+    bot_logger.log_admin_action(callback.from_user.id, f"открытие меню ролей для пользователя {user_id}")
+
+
+@router.callback_query(lambda c: c.data.startswith("user_setrole_"))
+async def user_setrole_handler(callback: CallbackQuery) -> None:
+    """
+    Установить роль пользователю
+    
+    Args:
+        callback (CallbackQuery): Callback с ID пользователя и новой ролью
+        
+    Returns:
+        None
+    """
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет прав!")
+        return
+    
+    parts = callback.data.split("_")
+    user_id = parts[2]
+    new_role = parts[3]
+    
+    user_info = user_service.get_user(user_id)
+    if not user_info:
+        await callback.answer("❌ Пользователь не найден")
+        return
+    
+    old_role = user_info.get('role', 'user')
+    
+    # Проверяем, не пытается ли админ понизить другого админа
+    if old_role == 'admin' and new_role != 'admin' and user_id in config.admin_ids:
+        await callback.answer("❌ Нельзя изменить роль главного администратора!")
+        return
+    
+    # Устанавливаем новую роль
+    if user_service.set_user_role(user_id, new_role):
+        role_display = {
+            'user': '👤 Пользователь',
+            'moderator': '🛡️ Модератор',
+            'admin': '👑 Администратор'
+        }.get(new_role, '👤 Пользователь')
+        
+        success_text = f"""
+✅ <b>Роль успешно изменена!</b>
+
+👤 Пользователь: {user_info.get('name', 'Неизвестно')}
+🆔 ID: <code>{user_id}</code>
+🔄 {old_role} → {new_role}
+🎭 Новая роль: {role_display}
+
+💡 <b>Изменения применены немедленно.</b>
+        """
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔙 Назад к ролям", callback_data=f"user_roles_{user_id}"),
+                InlineKeyboardButton(text="👤 К пользователю", callback_data=f"user_detail_{user_id}")
+            ]
+        ])
+        
+        await callback.message.edit_text(success_text, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+        bot_logger.log_admin_action(callback.from_user.id, f"изменение роли пользователя {user_id} с {old_role} на {new_role}")
+    else:
+        await callback.answer("❌ Ошибка при изменении роли!")
+        bot_logger.log_error(Exception("Ошибка изменения роли"), f"user_id: {user_id}, role: {new_role}") 

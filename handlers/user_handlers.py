@@ -454,6 +454,7 @@ async def cmd_help(message: Message) -> None:
             help_text += "\n🔧 <b>Административные команды:</b>\n"
             help_text += "/admin - Панель администратора\n"
             help_text += "/settag - Установить тег пользователю\n"
+            help_text += "/setrole - Установить роль пользователю\n"
             help_text += "/ban - Заблокировать пользователя\n"
             help_text += "/unban - Разблокировать пользователя\n"
             help_text += "/userinfo - Информация о пользователе\n"
@@ -566,6 +567,14 @@ async def cmd_profile(message: Message) -> None:
     
     tags_display = ", ".join(tags) if tags else "Не указаны"
     
+    # Получаем роль пользователя
+    role = user_info.get('role', 'user')
+    role_display = {
+        'user': '👤 Пользователь',
+        'moderator': '🛡️ Модератор', 
+        'admin': '👑 Администратор'
+    }.get(role, '👤 Пользователь')
+    
     # Формируем текст профиля
     profile_text = f"""
 👤 <b>Ваш профиль:</b>
@@ -575,6 +584,7 @@ async def cmd_profile(message: Message) -> None:
 📌 Username: {username_display}
 📅 Дата регистрации: {user_info.get('registered_at', 'Не указана')}
 📍 Статус: {user_info.get('status', 'Не указан')}
+🎭 Роль: {role_display}
 🏷️ Теги: {tags_display}
     """
     

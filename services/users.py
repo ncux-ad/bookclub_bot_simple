@@ -32,7 +32,7 @@ class UserService:
         users = data_manager.load_json(config.database.users_file)
         return users.get(user_id)
     
-    def create_user(self, user_id: str, name: str, username: Optional[str] = None, status: str = "inactive") -> bool:
+    def create_user(self, user_id: str, name: str, username: Optional[str] = None, status: str = "inactive", role: str = "user") -> bool:
         """
         Создать нового пользователя
         
@@ -41,6 +41,7 @@ class UserService:
             name (str): Имя пользователя
             username (Optional[str]): Username пользователя
             status (str): Статус пользователя (inactive/active)
+            role (str): Роль пользователя (user/moderator/admin)
             
         Returns:
             bool: True если пользователь создан успешно, False в противном случае
@@ -56,6 +57,7 @@ class UserService:
             "username": username,
             "registered_at": datetime.now().isoformat(),
             "status": status,
+            "role": role,
             "first_interaction": datetime.now().isoformat()
         }
         
@@ -66,7 +68,7 @@ class UserService:
         users[user_id] = user_data
         
         if data_manager.save_json(config.database.users_file, users):
-            self.logger.log_user_action(int(user_id), f"создание пользователя со статусом {status}")
+            self.logger.log_user_action(int(user_id), f"создание пользователя со статусом {status} и ролью {role}")
             return True
         else:
             self.logger.log_error(Exception("Ошибка сохранения пользователя"), f"user_id: {user_id}")
@@ -216,6 +218,80 @@ class UserService:
                 stats['new_today'] += 1
         
         return stats
+
+    def set_user_role(self, user_id: str, role: str) -> bool:
+        """
+        Установить роль пользователя
+        
+        Args:
+            user_id (str): ID пользователя
+            role (str): Новая роль (user/moderator/admin)
+            
+        Returns:
+            bool: True если роль установлена успешно, False в противном случае
+        """
+        # Валидация роли
+        valid_roles = ['user', 'moderator', 'admin']
+        if role not in valid_roles:
+            self.logger.log_error(Exception(f"Неверная роль: {role}"), f"user_id: {user_id}")
+            return False
+        
+        users = data_manager.load_json(config.database.users_file)
+        
+        if user_id not in users:
+            self.logger.log_error(Exception("Пользователь не найден"), f"user_id: {user_id}")
+            return False
+        
+        old_role = users[user_id].get('role', 'user')
+        users[user_id]['role'] = role
+        
+        if data_manager.save_json(config.database.users_file, users):
+            self.logger.log_user_action(int(user_id), f"изменение роли с {old_role} на {role}")
+            return True
+        else:
+            self.logger.log_error(Exception("Ошибка сохранения роли"), f"user_id: {user_id}")
+            return False
+    
+    def get_user_role(self, user_id: str) -> str:
+        """
+        Получить роль пользователя
+        
+        Args:
+            user_id (str): ID пользователя
+            
+        Returns:
+            str: Роль пользователя (user/moderator/admin) или 'user' по умолчанию
+        """
+        user_info = self.get_user(user_id)
+        if not user_info:
+            return 'user'
+        return user_info.get('role', 'user')
+    
+    def migrate_users_roles(self) -> bool:
+        """
+        Миграция: добавить роль 'user' всем существующим пользователям
+        
+        Returns:
+            bool: True если миграция выполнена успешно
+        """
+        users = data_manager.load_json(config.database.users_file)
+        updated = False
+        
+        for user_id, user_data in users.items():
+            if 'role' not in user_data:
+                user_data['role'] = 'user'
+                updated = True
+                self.logger.log_user_action(int(user_id), "миграция: добавлена роль 'user'")
+        
+        if updated:
+            if data_manager.save_json(config.database.users_file, users):
+                self.logger.log_admin_action(0, f"миграция ролей: обновлено {len(users)} пользователей")
+                return True
+            else:
+                self.logger.log_error(Exception("Ошибка сохранения при миграции ролей"), "migration")
+                return False
+        
+        return True  # Нет изменений - считаем успехом
 
 
 # Создаем глобальный экземпляр сервиса пользователей

@@ -121,6 +121,13 @@ async def main() -> None:
     dp_instance.shutdown.register(on_shutdown)
     
     try:
+        # Выполняем миграцию ролей пользователей
+        from services.users import user_service
+        if user_service.migrate_users_roles():
+            bot_logger.logger.info("✅ Миграция ролей пользователей выполнена")
+        else:
+            bot_logger.logger.warning("⚠️ Ошибка при миграции ролей пользователей")
+        
         bot_logger.logger.info("✅ Бот успешно запущен")
         
         # Запускаем polling

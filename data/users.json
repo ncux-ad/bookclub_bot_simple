@@ -5,7 +5,8 @@
     "registered_at": "2025-08-03T20:43:00.486621",
     "status": "active",
     "first_interaction": "2025-08-03T20:55:41.398720",
-    "activated_at": "2025-08-03T22:45:25.686996"
+    "activated_at": "2025-08-03T22:45:25.686996",
+    "role": "admin"
   },
   "366490333": {
     "name": "АД",
@@ -13,7 +14,8 @@
     "registered_at": "2025-08-03T20:45:44.575492",
     "status": "active",
     "first_interaction": "2025-08-03T20:55:41.398720",
-    "activated_at": "2025-08-03T22:45:25.686996"
+    "activated_at": "2025-08-03T22:45:25.686996",
+    "role": "admin"
   },
   "5172648128": {
     "name": "ПитьИлиНеПитт",
@@ -21,6 +23,7 @@
     "registered_at": "2025-08-03T20:55:41.398712",
     "status": "banned",
     "first_interaction": "2025-08-03T20:55:41.398720",
-    "activated_at": "2025-08-03T22:45:25.686996"
+    "activated_at": "2025-08-03T22:45:25.686996",
+    "role": "user"
   }
 }

@@ -119,6 +119,39 @@ def is_user_admin(user_id: int) -> bool:
     return config.is_admin(user_id)
 
 
+def is_user_moderator(user_id: int) -> bool:
+    """
+    Проверить, является ли пользователь модератором
+    
+    Args:
+        user_id: ID пользователя
+        
+    Returns:
+        bool: True если пользователь модератор, False иначе
+    """
+    user_info = user_service.get_user(str(user_id))
+    if not user_info:
+        return False
+    role = user_info.get('role', 'user')
+    return role in ['moderator', 'admin']
+
+
+def get_user_role(user_id: int) -> str:
+    """
+    Получить роль пользователя
+    
+    Args:
+        user_id: ID пользователя
+        
+    Returns:
+        str: Роль пользователя ('user', 'moderator', 'admin')
+    """
+    user_info = user_service.get_user(str(user_id))
+    if not user_info:
+        return 'user'
+    return user_info.get('role', 'user')
+
+
 def get_available_commands(user_id: int) -> list[str]:
     """
     Получить список доступных команд для пользователя
@@ -130,6 +163,7 @@ def get_available_commands(user_id: int) -> list[str]:
         list[str]: Список доступных команд
     """
     status = get_user_status(user_id)
+    role = get_user_role(user_id)
     is_admin = is_user_admin(user_id)
     
     # Базовые команды для всех
@@ -154,16 +188,22 @@ def get_available_commands(user_id: int) -> list[str]:
             '/cancel'
         ])
     
-    # Админские команды
+    # Команды для модераторов
+    if role in ['moderator', 'admin']:
+        commands.extend([
+            '/ban',
+            '/unban',
+            '/userinfo',
+            '/stats',
+            '/users'
+        ])
+    
+    # Админские команды (только для админов из config)
     if is_admin:
         commands.extend([
             '/admin',
             '/settag',
-            '/ban',
-            '/unban', 
-            '/userinfo',
-            '/stats',
-            '/users',
+            '/setrole',
             '/spamstats'
         ])
     
