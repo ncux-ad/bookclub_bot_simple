@@ -15,23 +15,10 @@ async def test_shutdown():
     """Тестирование graceful shutdown"""
     print("🚀 Запуск тестового процесса...")
     
-    # Создаем событие для shutdown
-    shutdown_event = asyncio.Event()
-    
-    def signal_handler(signum, frame):
-        """Обработчик сигналов"""
-        print(f"📡 Получен сигнал {signum}")
-        shutdown_event.set()
-    
-    # Регистрируем обработчики сигналов
-    if sys.platform != "win32":
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-    
     async def long_running_task():
         """Долго выполняющаяся задача"""
         i = 0
-        while not shutdown_event.is_set():
+        while i < 10:  # Ограничиваем для теста
             print(f"⏱️ Выполняется задача {i}")
             try:
                 await asyncio.sleep(1)
@@ -39,8 +26,6 @@ async def test_shutdown():
                 print("⏹️ Задача отменена")
                 break
             i += 1
-            if i > 10:  # Ограничиваем для теста
-                break
     
     async def graceful_shutdown():
         """Graceful shutdown"""
@@ -58,25 +43,7 @@ async def test_shutdown():
     
     try:
         # Запускаем основную задачу
-        task = asyncio.create_task(long_running_task())
-        
-        # На Windows используем простой await
-        if sys.platform == "win32":
-            await task
-        else:
-            # Ждем либо завершения задачи, либо сигнала
-            await asyncio.wait(
-                [task, shutdown_event.wait()],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-            
-            if shutdown_event.is_set():
-                print("⏹️ Получен сигнал завершения")
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+        await long_running_task()
         
     except KeyboardInterrupt:
         print("⏹️ Получен KeyboardInterrupt")

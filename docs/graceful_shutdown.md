@@ -26,23 +26,38 @@
 # Глобальные переменные для управления состоянием
 bot_instance = None
 dp_instance = None
-shutdown_event = asyncio.Event()
-
-# Обработчик сигналов
-def signal_handler(signum, frame):
-    shutdown_event.set()
 
 # Graceful shutdown функция
 async def on_shutdown():
-    await dp_instance.stop_polling()
-    await bot_instance.session.close()
-    await storage.close()
+    try:
+        # Закрываем сессию бота
+        if bot_instance and hasattr(bot_instance.session, 'closed'):
+            if not bot_instance.session.closed:
+                await bot_instance.session.close()
+        
+        # Закрываем storage
+        if hasattr(storage, 'is_closed'):
+            if not storage.is_closed():
+                await storage.close()
+        else:
+            await storage.close()
+    except Exception as e:
+        # Логируем ошибки
+        pass
+
+# Обработка исключений на верхнем уровне
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        # Игнорируем исключения после graceful shutdown
+        pass
 ```
 
 ### Кросс-платформенность:
 
-- **Windows**: Использует `KeyboardInterrupt` и простой `await`
-- **Unix/Linux**: Использует обработчики сигналов и `asyncio.wait()`
+- **Все платформы**: Использует встроенный graceful shutdown aiogram
+- **KeyboardInterrupt**: Обрабатывается автоматически
 
 ## 🧪 Тестирование
 
@@ -57,13 +72,14 @@ python test_shutdown.py
 
 При graceful shutdown вы увидите:
 ```
-📡 Получен сигнал 2
+⏹️ Получен сигнал прерывания (Ctrl+C)
 🔄 Начинаем graceful shutdown...
-✅ Polling остановлен
 ✅ Сессия бота закрыта
 ✅ Storage закрыт
 ✅ Graceful shutdown завершен
 ```
+
+**Примечание:** Graceful shutdown вызывается автоматически aiogram при получении сигналов прерывания. Исключения `CancelledError` и `KeyboardInterrupt` обрабатываются на верхнем уровне для предотвращения вывода ошибок после корректного завершения.
 
 ## ⚙️ Настройка
 

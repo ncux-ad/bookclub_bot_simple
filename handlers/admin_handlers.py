@@ -44,7 +44,7 @@ def admin_required(func):
 
 @router.message(Command("admin"))
 @admin_required
-async def cmd_admin(message: Message) -> None:
+async def cmd_admin(message: Message, **kwargs) -> None:
     """
     Панель администратора
     
@@ -184,4 +184,36 @@ async def admin_back(callback: CallbackQuery) -> None:
     
     keyboard = create_admin_keyboard()
     await callback.message.edit_text("🔧 <b>Панель администратора</b>\nВыберите действие:", 
-                                   reply_markup=keyboard, parse_mode="HTML") 
+                                    reply_markup=keyboard, parse_mode="HTML")
+
+
+@router.message(Command("settag"))
+async def cmd_settag(message: Message) -> None:
+    """
+    Установить тег пользователю (только для администраторов)
+    
+    Формат: /settag <user_id> <tag>
+    
+    Args:
+        message (Message): Сообщение с командой
+        
+    Returns:
+        None
+    """
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора!")
+        return
+    
+    args = message.text.split()
+    if len(args) < 3:
+        await message.answer("❌ Укажите ID пользователя и тег: /settag <user_id> <tag>")
+        return
+    
+    user_id = args[1]
+    tag = args[2]
+    
+    if user_service.add_user_tag(user_id, tag):
+        bot_logger.log_admin_action(message.from_user.id, f"установка тега '{tag}' пользователю {user_id}")
+        await message.answer(f"✅ Тег '{tag}' установлен пользователю {user_id}")
+    else:
+        await message.answer(f"❌ Ошибка установки тега для пользователя {user_id}") 

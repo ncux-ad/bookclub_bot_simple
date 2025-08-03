@@ -116,6 +116,46 @@ class UserService:
         """Разблокировать пользователя"""
         return self.update_user(user_id, status="active")
     
+    def set_user_tags(self, user_id: str, tags: List[str]) -> bool:
+        """
+        Установить теги для пользователя
+        
+        Args:
+            user_id (str): ID пользователя
+            tags (List[str]): Список тегов
+            
+        Returns:
+            bool: True если теги установлены успешно
+        """
+        return self.update_user(user_id, tags=tags)
+    
+    def add_user_tag(self, user_id: str, tag: str) -> bool:
+        """
+        Добавить тег пользователю
+        
+        Args:
+            user_id (str): ID пользователя
+            tag (str): Тег для добавления
+            
+        Returns:
+            bool: True если тег добавлен успешно
+        """
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        
+        current_tags = user.get('tags', [])
+        if isinstance(current_tags, str):
+            current_tags = [current_tags]
+        elif not isinstance(current_tags, list):
+            current_tags = []
+        
+        if tag not in current_tags:
+            current_tags.append(tag)
+            return self.update_user(user_id, tags=current_tags)
+        
+        return True
+    
     def get_user_stats(self) -> Dict[str, int]:
         """
         Получить статистику пользователей

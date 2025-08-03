@@ -276,6 +276,7 @@ async def cmd_help(message: Message) -> None:
 
 Для администраторов:
 /admin - Панель администратора
+/settag &lt;user_id&gt; &lt;tag&gt; - Установить тег пользователю
     """
     
     bot_logger.log_user_action(message.from_user.id, "запрос справки")
@@ -322,11 +323,16 @@ async def cmd_profile(message: Message) -> None:
     """
     Показать профиль пользователя
     
-    Отображает информацию о профиле пользователя,
-    включая имя, ID, дату регистрации и статус.
+    Отображает информацию о пользователе:
+    - ID пользователя (копируемый)
+    - Имя пользователя
+    - Username (кликабельный)
+    - Дата регистрации
+    - Статус в клубе
+    - Теги/роли
     
     Args:
-        message (Message): Сообщение с командой
+        message (Message): Сообщение с командой профиля
         
     Returns:
         None
@@ -337,16 +343,41 @@ async def cmd_profile(message: Message) -> None:
     bot_logger.log_user_action(message.from_user.id, "просмотр профиля")
     
     if not user_info:
-        await message.answer("Вы не зарегистрированы! Используйте /register")
+        await message.answer("❌ Вы не зарегистрированы в клубе!\nИспользуйте /register <фраза> для регистрации.")
         return
     
-    text = f"""
+    # Получаем username пользователя
+    username = user_info.get('username', '')
+    if username and not username.startswith('@'):
+        username = f"@{username}"
+    
+    # Формируем кликабельный username
+    username_display = username if username else "Не указан"
+    if username and username != "Не указан":
+        username_display = f"<a href='https://t.me/{username[1:]}'>{username}</a>"
+    
+    # Формируем копируемый ID
+    user_id_display = f"<code>{user_id}</code>"
+    
+    # Формируем отображение тегов
+    tags = user_info.get('tags', [])
+    if isinstance(tags, str):
+        tags = [tags]
+    elif not isinstance(tags, list):
+        tags = []
+    
+    tags_display = ", ".join(tags) if tags else "Не указаны"
+    
+    # Формируем текст профиля
+    profile_text = f"""
 👤 <b>Ваш профиль:</b>
 
-📝 Имя: {user_info.get('name', 'Не указано')}
-🆔 ID: {user_id}
-📅 Регистрация: {user_info.get('registered_at', 'Не указано')}
-✅ Статус: {user_info.get('status', 'Не указан')}
+🆔 ID: {user_id_display}
+🔹 Имя: {user_info.get('name', 'Не указано')}
+📌 Username: {username_display}
+📅 Дата регистрации: {user_info.get('registered_at', 'Не указана')}
+📍 Статус: {user_info.get('status', 'Не указан')}
+🏷️ Теги: {tags_display}
     """
     
-    await message.answer(text, parse_mode="HTML") 
+    await message.answer(profile_text, parse_mode="HTML", disable_web_page_preview=True) 

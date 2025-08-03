@@ -7,8 +7,6 @@
 
 import asyncio
 import logging
-import signal
-import sys
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -23,23 +21,6 @@ from handlers import user_router, admin_router
 # Глобальные переменные для управления состоянием
 bot_instance = None
 dp_instance = None
-shutdown_event = asyncio.Event()
-
-def signal_handler(signum, frame):
-    """
-    Обработчик сигналов для graceful shutdown
-    
-    Args:
-        signum: Номер сигнала
-        frame: Текущий кадр стека
-    """
-    bot_logger.logger.info(f"📡 Получен сигнал {signum}")
-    shutdown_event.set()
-
-# Регистрируем обработчики сигналов
-if sys.platform != "win32":  # На Windows сигналы работают по-другому
-    signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
-    signal.signal(signal.SIGTERM, signal_handler)  # SIGTERM
 
 
 async def main() -> None:
@@ -99,19 +80,28 @@ async def main() -> None:
         bot_logger.logger.info("🔄 Начинаем graceful shutdown...")
         
         try:
-            # Останавливаем polling
-            if dp_instance:
-                await dp_instance.stop_polling()
-                bot_logger.logger.info("✅ Polling остановлен")
-            
             # Закрываем сессию бота
             if bot_instance:
-                await bot_instance.session.close()
-                bot_logger.logger.info("✅ Сессия бота закрыта")
+                try:
+                    if hasattr(bot_instance.session, 'closed') and not bot_instance.session.closed:
+                        await bot_instance.session.close()
+                        bot_logger.logger.info("✅ Сессия бота закрыта")
+                    elif not hasattr(bot_instance.session, 'closed'):
+                        await bot_instance.session.close()
+                        bot_logger.logger.info("✅ Сессия бота закрыта")
+                except Exception as e:
+                    bot_logger.log_error(e, "ошибка при закрытии сессии бота")
             
             # Сохраняем состояние storage
-            await storage.close()
-            bot_logger.logger.info("✅ Storage закрыт")
+            try:
+                if hasattr(storage, 'is_closed') and not storage.is_closed():
+                    await storage.close()
+                    bot_logger.logger.info("✅ Storage закрыт")
+                elif not hasattr(storage, 'is_closed'):
+                    await storage.close()
+                    bot_logger.logger.info("✅ Storage закрыт")
+            except Exception as e:
+                bot_logger.log_error(e, "ошибка при закрытии storage")
             
         except Exception as e:
             bot_logger.log_error(e, "ошибка при graceful shutdown")
@@ -124,37 +114,25 @@ async def main() -> None:
     try:
         bot_logger.logger.info("✅ Бот успешно запущен")
         
-        # Запускаем polling с мониторингом сигналов
-        polling_task = asyncio.create_task(
-            dp_instance.start_polling(bot_instance, skip_updates=True)
-        )
-        
-        # На Windows используем простой await, на Unix - мониторинг сигналов
-        if sys.platform == "win32":
-            await polling_task
-        else:
-            # Ждем либо завершения polling, либо сигнала shutdown
-            await asyncio.wait(
-                [polling_task, shutdown_event.wait()],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-            
-            # Если получен сигнал shutdown, останавливаем polling
-            if shutdown_event.is_set():
-                bot_logger.logger.info("⏹️ Получен сигнал завершения работы")
-                polling_task.cancel()
-                try:
-                    await polling_task
-                except asyncio.CancelledError:
-                    pass
+        # Запускаем polling
+        await dp_instance.start_polling(bot_instance, skip_updates=True)
         
     except KeyboardInterrupt:
         bot_logger.logger.info("⏹️ Получен сигнал прерывания (Ctrl+C)")
+        # Graceful shutdown будет вызван автоматически aiogram
+    except asyncio.CancelledError:
+        # Игнорируем CancelledError после graceful shutdown
+        pass
     except Exception as e:
         bot_logger.log_error(e, "критическая ошибка при запуске бота")
-    finally:
-        await on_shutdown()
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        # Игнорируем KeyboardInterrupt на верхнем уровне
+        pass
+    except asyncio.CancelledError:
+        # Игнорируем CancelledError на верхнем уровне
+        pass 
