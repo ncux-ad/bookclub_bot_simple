@@ -2,7 +2,13 @@
   "439304619": {
     "name": "Андрей",
     "username": "ncux11",
-    "registered_at": "2025-08-03T20:00:12.513041",
+    "registered_at": "2025-08-03T20:43:00.486621",
+    "status": "active"
+  },
+  "366490333": {
+    "name": "АД",
+    "username": "psy_danilin",
+    "registered_at": "2025-08-03T20:45:44.575492",
     "status": "active"
   }
 }

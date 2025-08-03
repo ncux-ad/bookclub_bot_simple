@@ -5,9 +5,10 @@
 @created: 2024-01-15
 """
 
-from aiogram import Router, types
-from aiogram.filters import Command
+from aiogram import Router, types, F
+from aiogram.filters import Command, StateFilter
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.context import FSMContext
 from datetime import datetime
 
 from config import config
@@ -18,6 +19,7 @@ from keyboards.inline import create_books_keyboard, create_book_keyboard, create
 from services.users import user_service
 from services.books import book_service
 from services.events import event_service
+from utils.states import RegistrationStates, BookSearchStates
 
 router = Router()
 
@@ -54,12 +56,11 @@ async def cmd_start(message: Message) -> None:
 
 
 @router.message(Command("register"))
-async def cmd_register(message: Message) -> None:
+async def cmd_register(message: Message, state: FSMContext) -> None:
     """
-    Регистрация пользователя в клубе
+    Начало процесса регистрации пользователя
     
-    Обрабатывает команду регистрации с проверкой секретной фразы.
-    Включает валидацию входных данных и защиту от брутфорса.
+    Запускает FSM для пошаговой регистрации с проверкой секретной фразы.
     
     Args:
         message (Message): Сообщение с командой регистрации
@@ -69,7 +70,7 @@ async def cmd_register(message: Message) -> None:
     """
     user_id = str(message.from_user.id)
     
-    bot_logger.log_user_action(message.from_user.id, "попытка регистрации")
+    bot_logger.log_user_action(message.from_user.id, "начало регистрации")
     
     # Проверка существования пользователя
     if user_service.get_user(user_id):
@@ -81,18 +82,32 @@ async def cmd_register(message: Message) -> None:
         await message.answer("❌ Слишком много попыток. Попробуйте позже.")
         return
     
-    # Валидация входных данных
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer("❌ Укажите секретную фразу: /register <фраза>")
-        security_manager.record_login_attempt(message.from_user.id, False)
-        return
+    await message.answer("🔐 Введите секретную фразу для регистрации:")
+    await message.answer("💡 Подсказка: фраза указана в документации клуба")
     
-    secret_phrase = args[1]
+    # Устанавливаем состояние ожидания фразы
+    await state.set_state(RegistrationStates.waiting_for_phrase)
+
+
+@router.message(StateFilter(RegistrationStates.waiting_for_phrase))
+async def process_registration_phrase(message: Message, state: FSMContext) -> None:
+    """
+    Обработка секретной фразы при регистрации
+    
+    Args:
+        message (Message): Сообщение с секретной фразой
+        
+    Returns:
+        None
+    """
+    user_id = str(message.from_user.id)
+    secret_phrase = message.text.strip()
+    
+    bot_logger.log_user_action(message.from_user.id, "ввод секретной фразы")
     
     # Проверка секретной фразы
     if not security_manager.verify_secret_phrase(secret_phrase, config.security.secret_phrase):
-        await message.answer("❌ Неверная секретная фраза!")
+        await message.answer("❌ Неверная секретная фраза! Попробуйте еще раз или используйте /cancel для отмены")
         security_manager.record_login_attempt(message.from_user.id, False)
         bot_logger.log_security_event("неверная_фраза", message.from_user.id)
         return
@@ -105,8 +120,31 @@ async def cmd_register(message: Message) -> None:
     ):
         security_manager.record_login_attempt(message.from_user.id, True)
         await message.answer("✅ Регистрация успешна! Используйте /help для списка команд")
+        
+        # Сбрасываем состояние
+        await state.clear()
     else:
-        await message.answer("❌ Ошибка регистрации")
+        await message.answer("❌ Ошибка регистрации. Попробуйте позже.")
+
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext) -> None:
+    """
+    Отмена текущего процесса
+    
+    Args:
+        message (Message): Сообщение с командой отмены
+        
+    Returns:
+        None
+    """
+    current_state = await state.get_state()
+    
+    if current_state:
+        await state.clear()
+        await message.answer("❌ Операция отменена. Используйте /help для списка команд")
+    else:
+        await message.answer("Нет активных операций для отмены.")
 
 
 @router.message(Command("books"))
@@ -133,6 +171,67 @@ async def cmd_books(message: Message) -> None:
     
     keyboard = create_books_keyboard(books)
     await message.answer("📖 Выберите книгу:", reply_markup=keyboard)
+
+
+@router.message(Command("search"))
+async def cmd_search(message: Message, state: FSMContext) -> None:
+    """
+    Начать поиск книг
+    
+    Запускает FSM для поиска книг по названию или автору.
+    
+    Args:
+        message (Message): Сообщение с командой поиска
+        
+    Returns:
+        None
+    """
+    bot_logger.log_user_action(message.from_user.id, "начало поиска книг")
+    
+    await message.answer("🔍 Введите название книги или автора для поиска:")
+    await message.answer("💡 Примеры: 'Гарри Поттер', 'Толстой', 'фантастика'")
+    
+    # Устанавливаем состояние ожидания запроса
+    await state.set_state(BookSearchStates.waiting_for_query)
+
+
+@router.message(StateFilter(BookSearchStates.waiting_for_query))
+async def process_search_query(message: Message, state: FSMContext) -> None:
+    """
+    Обработка поискового запроса
+    
+    Args:
+        message (Message): Сообщение с поисковым запросом
+        
+    Returns:
+        None
+    """
+    query = message.text.strip().lower()
+    
+    bot_logger.log_user_action(message.from_user.id, f"поиск книг: {query}")
+    
+    books = book_service.get_all_books()
+    found_books = {}
+    
+    # Поиск книг по запросу
+    for title, book_info in books.items():
+        title_lower = title.lower()
+        author_lower = book_info.get('author', '').lower()
+        description_lower = book_info.get('description', '').lower()
+        
+        if (query in title_lower or 
+            query in author_lower or 
+            query in description_lower):
+            found_books[title] = book_info
+    
+    if found_books:
+        keyboard = create_books_keyboard(found_books)
+        await message.answer(f"🔍 Найдено {len(found_books)} книг:", reply_markup=keyboard)
+    else:
+        await message.answer("❌ Книги не найдены. Попробуйте другой запрос.")
+    
+    # Сбрасываем состояние
+    await state.clear()
 
 
 @router.callback_query(lambda c: c.data.startswith('book:'))
@@ -268,10 +367,12 @@ async def cmd_help(message: Message) -> None:
 📚 <b>Команды книжного клуба:</b>
 
 /start - Начать работу с ботом
-/register &lt;фраза&gt; - Регистрация в клубе
-/books - Просмотр библиотеки
+/register - Регистрация в клубе (пошагово)
+/search - Поиск книг по названию или автору
+/books - Просмотр всей библиотеки
 /schedule - Расписание встреч
 /profile - Ваш профиль
+/cancel - Отменить текущую операцию
 /help - Эта справка
 
 Для администраторов:
