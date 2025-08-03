@@ -876,10 +876,14 @@ async def users_export_handler(callback: CallbackQuery) -> None:
         
         export_text += f"{user_id},{name},{username},{status},{registered},{tags}\n"
     
-    # Отправляем как файл
+    # Отправляем как файл с правильной кодировкой для Excel
+    # Добавляем BOM для корректного отображения русских символов
+    bom = '\ufeff'.encode('utf-8')
+    csv_content = bom + export_text.encode('utf-8-sig')
+    
     await callback.message.answer_document(
         types.BufferedInputFile(
-            export_text.encode('utf-8'),
+            csv_content,
             filename=f"users_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         ),
         caption="📊 Экспорт пользователей"
