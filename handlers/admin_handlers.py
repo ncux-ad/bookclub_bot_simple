@@ -8,6 +8,7 @@
 from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import datetime, timedelta
 
 from config import config
 from utils.data_manager import data_manager
@@ -217,4 +218,187 @@ async def cmd_settag(message: Message) -> None:
         bot_logger.log_admin_action(message.from_user.id, f"установка тега '{tag}' пользователю {user_id}")
         await message.answer(f"✅ Тег '{tag}' установлен пользователю {user_id}")
     else:
-        await message.answer(f"❌ Ошибка установки тега для пользователя {user_id}") 
+        await message.answer(f"❌ Ошибка установки тега для пользователя {user_id}")
+
+
+@router.message(Command("stats"))
+async def cmd_stats(message: Message) -> None:
+    """
+    Показать расширенную статистику (только для администраторов)
+    
+    Args:
+        message (Message): Сообщение с командой
+        
+    Returns:
+        None
+    """
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора!")
+        return
+    
+    user_stats = user_service.get_user_stats()
+    books = book_service.get_all_books()
+    event_stats = event_service.get_event_stats()
+    
+    # Получаем дополнительную статистику
+    users = user_service.get_all_users()
+    active_users = len([u for u in users.values() if u.get('status') == 'active'])
+    inactive_users = len([u for u in users.values() if u.get('status') == 'inactive'])
+    banned_users = len([u for u in users.values() if u.get('status') == 'banned'])
+    
+    # Статистика по дням
+    today = datetime.now().date().isoformat()
+    week_ago = (datetime.now() - timedelta(days=7)).date().isoformat()
+    
+    new_this_week = 0
+    for user_data in users.values():
+        first_interaction = user_data.get('first_interaction', '')
+        if first_interaction.startswith(today) or (first_interaction >= week_ago and first_interaction <= today):
+            new_this_week += 1
+    
+    stats_text = f"""
+📊 <b>Расширенная статистика клуба:</b>
+
+👥 <b>Пользователи:</b>
+   • Всего: {user_stats['total']}
+   • Активных: {active_users}
+   • Неактивных: {inactive_users}
+   • Заблокированных: {banned_users}
+   • Новых сегодня: {user_stats['new_today']}
+   • Новых за неделю: {new_this_week}
+
+📚 <b>Библиотека:</b>
+   • Книг в библиотеке: {len(books)}
+
+📅 <b>События:</b>
+   • Всего событий: {event_stats['total']}
+   • Предстоящих: {event_stats['upcoming']}
+
+📈 <b>Активность:</b>
+   • Процент активных: {(active_users/user_stats['total']*100):.1f}% (от общего числа)
+    """
+    
+    bot_logger.log_admin_action(message.from_user.id, "просмотр расширенной статистики")
+    await message.answer(stats_text, parse_mode="HTML")
+
+
+@router.message(Command("ban"))
+async def cmd_ban(message: Message) -> None:
+    """
+    Заблокировать пользователя (только для администраторов)
+    
+    Формат: /ban <user_id>
+    
+    Args:
+        message (Message): Сообщение с командой
+        
+    Returns:
+        None
+    """
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора!")
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("❌ Укажите ID пользователя: /ban <user_id>")
+        return
+    
+    user_id = args[1]
+    
+    if user_service.ban_user(user_id):
+        bot_logger.log_admin_action(message.from_user.id, f"блокировка пользователя {user_id}")
+        await message.answer(f"✅ Пользователь {user_id} заблокирован")
+    else:
+        await message.answer(f"❌ Ошибка блокировки пользователя {user_id}")
+
+
+@router.message(Command("unban"))
+async def cmd_unban(message: Message) -> None:
+    """
+    Разблокировать пользователя (только для администраторов)
+    
+    Формат: /unban <user_id>
+    
+    Args:
+        message (Message): Сообщение с командой
+        
+    Returns:
+        None
+    """
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора!")
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("❌ Укажите ID пользователя: /unban <user_id>")
+        return
+    
+    user_id = args[1]
+    
+    if user_service.unban_user(user_id):
+        bot_logger.log_admin_action(message.from_user.id, f"разблокировка пользователя {user_id}")
+        await message.answer(f"✅ Пользователь {user_id} разблокирован")
+    else:
+        await message.answer(f"❌ Ошибка разблокировки пользователя {user_id}")
+
+
+@router.message(Command("userinfo"))
+async def cmd_userinfo(message: Message) -> None:
+    """
+    Показать информацию о пользователе (только для администраторов)
+    
+    Формат: /userinfo <user_id>
+    
+    Args:
+        message (Message): Сообщение с командой
+        
+    Returns:
+        None
+    """
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора!")
+        return
+    
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("❌ Укажите ID пользователя: /userinfo <user_id>")
+        return
+    
+    user_id = args[1]
+    user_info = user_service.get_user(user_id)
+    
+    if not user_info:
+        await message.answer(f"❌ Пользователь {user_id} не найден")
+        return
+    
+    # Формируем детальную информацию о пользователе
+    username = user_info.get('username', '')
+    if username and not username.startswith('@'):
+        username = f"@{username}"
+    
+    tags = user_info.get('tags', [])
+    if isinstance(tags, str):
+        tags = [tags]
+    elif not isinstance(tags, list):
+        tags = []
+    
+    tags_display = ", ".join(tags) if tags else "Не указаны"
+    
+    info_text = f"""
+👤 <b>Информация о пользователе:</b>
+
+🆔 ID: <code>{user_id}</code>
+🔹 Имя: {user_info.get('name', 'Не указано')}
+📌 Username: {username if username else 'Не указан'}
+📅 Дата регистрации: {user_info.get('registered_at', 'Не указана')}
+📍 Статус: {user_info.get('status', 'Не указан')}
+🏷️ Теги: {tags_display}
+    """
+    
+    if user_info.get('activated_at'):
+        info_text += f"\n✅ Активирован: {user_info.get('activated_at')}"
+    
+    bot_logger.log_admin_action(message.from_user.id, f"просмотр информации о пользователе {user_id}")
+    await message.answer(info_text, parse_mode="HTML", disable_web_page_preview=True) 

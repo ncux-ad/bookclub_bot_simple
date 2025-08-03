@@ -406,6 +406,10 @@ async def cmd_help(message: Message) -> None:
 Для администраторов:
 /admin - Панель администратора
 /settag &lt;user_id&gt; &lt;tag&gt; - Установить тег пользователю
+/ban &lt;user_id&gt; - Заблокировать пользователя
+/unban &lt;user_id&gt; - Разблокировать пользователя
+/userinfo &lt;user_id&gt; - Информация о пользователе
+/stats - Расширенная статистика
     """
     
     bot_logger.log_user_action(message.from_user.id, "запрос справки")
