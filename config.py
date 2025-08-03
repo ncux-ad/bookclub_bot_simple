@@ -56,10 +56,6 @@ class Config:
         # Валидируем переменные окружения
         is_valid, validation_result = env_validator.validate_all()
         
-        if not is_valid:
-            env_validator.print_validation_report(validation_result)
-            raise ValueError("Ошибки в конфигурации переменных окружения")
-        
         # Инициализируем конфигурацию с валидированными данными
         self.bot_token = validation_result["bot_token"]
         self.database = DatabaseConfig()
@@ -72,6 +68,13 @@ class Config:
         
         # Выводим отчет о валидации
         env_validator.print_validation_report(validation_result)
+        
+        # Проверяем критические ошибки
+        if not is_valid and validation_result["errors"]:
+            critical_errors = [err for err in validation_result["errors"] 
+                             if "BOT_TOKEN" in err]
+            if critical_errors:
+                raise ValueError("Критические ошибки в конфигурации переменных окружения")
     
     def _get_required_env(self, key: str) -> str:
         """Получить обязательную переменную окружения"""

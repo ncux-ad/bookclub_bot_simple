@@ -20,30 +20,30 @@ class UserService:
         self.logger = bot_logger
     
     def get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Получить пользователя по ID
-    
-    Args:
-        user_id (str): ID пользователя
+        """
+        Получить пользователя по ID
         
-    Returns:
-        Optional[Dict[str, Any]]: Данные пользователя или None если не найден
-    """
+        Args:
+            user_id (str): ID пользователя
+            
+        Returns:
+            Optional[Dict[str, Any]]: Данные пользователя или None если не найден
+        """
         users = data_manager.load_json(config.database.users_file)
         return users.get(user_id)
     
     def create_user(self, user_id: str, name: str, username: Optional[str] = None) -> bool:
-    """
-    Создать нового пользователя
-    
-    Args:
-        user_id (str): Уникальный ID пользователя
-        name (str): Имя пользователя
-        username (Optional[str]): Username пользователя
+        """
+        Создать нового пользователя
         
-    Returns:
-        bool: True если пользователь создан успешно, False в противном случае
-    """
+        Args:
+            user_id (str): Уникальный ID пользователя
+            name (str): Имя пользователя
+            username (Optional[str]): Username пользователя
+            
+        Returns:
+            bool: True если пользователь создан успешно, False в противном случае
+        """
         users = data_manager.load_json(config.database.users_file)
         
         if user_id in users:
@@ -117,16 +117,16 @@ class UserService:
         return self.update_user(user_id, status="active")
     
     def get_user_stats(self) -> Dict[str, int]:
-    """
-    Получить статистику пользователей
-    
-    Returns:
-        Dict[str, int]: Словарь со статистикой:
-            - total: общее количество пользователей
-            - active: количество активных пользователей
-            - inactive: количество неактивных пользователей
-            - banned: количество заблокированных пользователей
-    """
+        """
+        Получить статистику пользователей
+        
+        Returns:
+            Dict[str, int]: Словарь со статистикой:
+                - total: общее количество пользователей
+                - active: количество активных пользователей
+                - inactive: количество неактивных пользователей
+                - banned: количество заблокированных пользователей
+        """
         users = data_manager.load_json(config.database.users_file)
         
         stats = {
