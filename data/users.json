@@ -10,5 +10,12 @@
     "username": "psy_danilin",
     "registered_at": "2025-08-03T20:45:44.575492",
     "status": "active"
+  },
+  "5172648128": {
+    "name": "ПитьИлиНеПитт",
+    "username": null,
+    "registered_at": "2025-08-03T20:55:41.398712",
+    "status": "inactive",
+    "first_interaction": "2025-08-03T20:55:41.398720"
   }
 }

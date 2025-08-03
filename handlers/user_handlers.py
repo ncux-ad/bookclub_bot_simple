@@ -29,8 +29,8 @@ async def cmd_start(message: Message) -> None:
     """
     Начальная команда бота
     
-    Приветствует пользователя и проверяет его регистрацию.
-    Если пользователь не зарегистрирован, предлагает пройти регистрацию.
+    Приветствует пользователя и автоматически создает запись в базе.
+    Если пользователь не авторизован, предлагает пройти регистрацию.
     
     Args:
         message (Message): Сообщение от пользователя
@@ -39,20 +39,36 @@ async def cmd_start(message: Message) -> None:
         None
     """
     user_id = str(message.from_user.id)
-    users = data_manager.load_json(config.database.users_file)
+    user_info = user_service.get_user(user_id)
     
     bot_logger.log_user_action(message.from_user.id, "команда /start")
     
-    if user_id not in users:
-        await message.answer(
-            "👋 Добро пожаловать в книжный клуб!\n"
-            "Для регистрации используйте /register <секретная_фраза>"
-        )
+    if not user_info:
+        # Создаем пользователя автоматически со статусом inactive
+        if user_service.create_user(
+            user_id=user_id,
+            name=message.from_user.first_name,
+            username=message.from_user.username,
+            status="inactive"
+        ):
+            await message.answer(
+                "👋 Добро пожаловать в книжный клуб!\n"
+                "Для доступа к функциям используйте /register"
+            )
+        else:
+            await message.answer("❌ Ошибка создания профиля. Попробуйте позже.")
     else:
-        await message.answer(
-            f"Привет, {message.from_user.first_name}! 👋\n"
-            "Используйте /help для списка команд"
-        )
+        status = user_info.get('status', 'unknown')
+        if status == 'active':
+            await message.answer(
+                f"Привет, {message.from_user.first_name}! 👋\n"
+                "Используйте /help для списка команд"
+            )
+        else:
+            await message.answer(
+                "👋 С возвращением!\n"
+                "Для доступа к функциям используйте /register"
+            )
 
 
 @router.message(Command("register"))
@@ -73,8 +89,9 @@ async def cmd_register(message: Message, state: FSMContext) -> None:
     bot_logger.log_user_action(message.from_user.id, "начало регистрации")
     
     # Проверка существования пользователя
-    if user_service.get_user(user_id):
-        await message.answer("Вы уже зарегистрированы!")
+    user_info = user_service.get_user(user_id)
+    if user_info and user_info.get('status') == 'active':
+        await message.answer("Вы уже авторизованы!")
         return
     
     # Проверка попыток входа
@@ -112,19 +129,15 @@ async def process_registration_phrase(message: Message, state: FSMContext) -> No
         bot_logger.log_security_event("неверная_фраза", message.from_user.id)
         return
     
-    # Создание пользователя через сервис
-    if user_service.create_user(
-        user_id=user_id,
-        name=message.from_user.first_name,
-        username=message.from_user.username
-    ):
+    # Активация пользователя через сервис
+    if user_service.activate_user(user_id):
         security_manager.record_login_attempt(message.from_user.id, True)
-        await message.answer("✅ Регистрация успешна! Используйте /help для списка команд")
+        await message.answer("✅ Авторизация успешна! Используйте /help для списка команд")
         
         # Сбрасываем состояние
         await state.clear()
     else:
-        await message.answer("❌ Ошибка регистрации. Попробуйте позже.")
+        await message.answer("❌ Ошибка авторизации. Попробуйте позже.")
 
 
 @router.message(Command("cancel"))
@@ -153,7 +166,7 @@ async def cmd_books(message: Message) -> None:
     Показать список доступных книг
     
     Отображает интерактивную клавиатуру со всеми книгами в библиотеке.
-    Если книг нет, показывает соответствующее сообщение.
+    Требует авторизации пользователя.
     
     Args:
         message (Message): Сообщение с командой
@@ -161,6 +174,13 @@ async def cmd_books(message: Message) -> None:
     Returns:
         None
     """
+    user_id = str(message.from_user.id)
+    user_info = user_service.get_user(user_id)
+    
+    if not user_info or user_info.get('status') != 'active':
+        await message.answer("❌ Для доступа к библиотеке необходимо авторизоваться!\nИспользуйте /register")
+        return
+    
     books = book_service.get_all_books()
     
     bot_logger.log_user_action(message.from_user.id, "просмотр библиотеки")
@@ -179,6 +199,7 @@ async def cmd_search(message: Message, state: FSMContext) -> None:
     Начать поиск книг
     
     Запускает FSM для поиска книг по названию или автору.
+    Требует авторизации пользователя.
     
     Args:
         message (Message): Сообщение с командой поиска
@@ -186,6 +207,13 @@ async def cmd_search(message: Message, state: FSMContext) -> None:
     Returns:
         None
     """
+    user_id = str(message.from_user.id)
+    user_info = user_service.get_user(user_id)
+    
+    if not user_info or user_info.get('status') != 'active':
+        await message.answer("❌ Для поиска книг необходимо авторизоваться!\nИспользуйте /register")
+        return
+    
     bot_logger.log_user_action(message.from_user.id, "начало поиска книг")
     
     await message.answer("🔍 Введите название книги или автора для поиска:")
@@ -367,7 +395,7 @@ async def cmd_help(message: Message) -> None:
 📚 <b>Команды книжного клуба:</b>
 
 /start - Начать работу с ботом
-/register - Регистрация в клубе (пошагово)
+/register - Авторизация в клубе (пошагово)
 /search - Поиск книг по названию или автору
 /books - Просмотр всей библиотеки
 /schedule - Расписание встреч
@@ -390,7 +418,7 @@ async def cmd_schedule(message: Message) -> None:
     Показать расписание встреч
     
     Отображает список предстоящих встреч книжного клуба.
-    Показывает дату, время и описание каждого события.
+    Требует авторизации пользователя.
     
     Args:
         message (Message): Сообщение с командой
@@ -398,6 +426,13 @@ async def cmd_schedule(message: Message) -> None:
     Returns:
         None
     """
+    user_id = str(message.from_user.id)
+    user_info = user_service.get_user(user_id)
+    
+    if not user_info or user_info.get('status') != 'active':
+        await message.answer("❌ Для доступа к расписанию необходимо авторизоваться!\nИспользуйте /register")
+        return
+    
     events = event_service.get_upcoming_events()
     
     bot_logger.log_user_action(message.from_user.id, "просмотр расписания")
@@ -444,7 +479,12 @@ async def cmd_profile(message: Message) -> None:
     bot_logger.log_user_action(message.from_user.id, "просмотр профиля")
     
     if not user_info:
-        await message.answer("❌ Вы не зарегистрированы в клубе!\nИспользуйте /register <фраза> для регистрации.")
+        await message.answer("❌ Профиль не найден!\nИспользуйте /start для создания профиля.")
+        return
+    
+    status = user_info.get('status', 'unknown')
+    if status != 'active':
+        await message.answer("❌ Вы не авторизованы в клубе!\nИспользуйте /register для авторизации.")
         return
     
     # Получаем username пользователя

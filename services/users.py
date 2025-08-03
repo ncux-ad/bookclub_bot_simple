@@ -32,7 +32,7 @@ class UserService:
         users = data_manager.load_json(config.database.users_file)
         return users.get(user_id)
     
-    def create_user(self, user_id: str, name: str, username: Optional[str] = None) -> bool:
+    def create_user(self, user_id: str, name: str, username: Optional[str] = None, status: str = "inactive") -> bool:
         """
         Создать нового пользователя
         
@@ -40,6 +40,7 @@ class UserService:
             user_id (str): Уникальный ID пользователя
             name (str): Имя пользователя
             username (Optional[str]): Username пользователя
+            status (str): Статус пользователя (inactive/active)
             
         Returns:
             bool: True если пользователь создан успешно, False в противном случае
@@ -54,7 +55,8 @@ class UserService:
             "name": name,
             "username": username,
             "registered_at": datetime.now().isoformat(),
-            "status": "active"
+            "status": status,
+            "first_interaction": datetime.now().isoformat()
         }
         
         if not data_manager.validate_user_data(user_data):
@@ -64,7 +66,7 @@ class UserService:
         users[user_id] = user_data
         
         if data_manager.save_json(config.database.users_file, users):
-            self.logger.log_user_action(int(user_id), "успешная регистрация")
+            self.logger.log_user_action(int(user_id), f"создание пользователя со статусом {status}")
             return True
         else:
             self.logger.log_error(Exception("Ошибка сохранения пользователя"), f"user_id: {user_id}")
@@ -116,6 +118,25 @@ class UserService:
         """Разблокировать пользователя"""
         return self.update_user(user_id, status="active")
     
+    def activate_user(self, user_id: str) -> bool:
+        """
+        Активировать пользователя после успешной авторизации
+        
+        Args:
+            user_id (str): ID пользователя
+            
+        Returns:
+            bool: True если пользователь активирован успешно
+        """
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        
+        if user.get('status') == 'active':
+            return True  # Уже активен
+        
+        return self.update_user(user_id, status="active", activated_at=datetime.now().isoformat())
+    
     def set_user_tags(self, user_id: str, tags: List[str]) -> bool:
         """
         Установить теги для пользователя
@@ -166,20 +187,28 @@ class UserService:
                 - active: количество активных пользователей
                 - inactive: количество неактивных пользователей
                 - banned: количество заблокированных пользователей
+                - new_today: количество новых пользователей за сегодня
         """
         users = data_manager.load_json(config.database.users_file)
+        today = datetime.now().date().isoformat()
         
         stats = {
             "total": len(users),
             "active": 0,
             "inactive": 0,
-            "banned": 0
+            "banned": 0,
+            "new_today": 0
         }
         
         for user_data in users.values():
             status = user_data.get('status', 'unknown')
             if status in stats:
                 stats[status] += 1
+            
+            # Подсчет новых пользователей за сегодня
+            first_interaction = user_data.get('first_interaction', '')
+            if first_interaction.startswith(today):
+                stats['new_today'] += 1
         
         return stats
 

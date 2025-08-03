@@ -97,6 +97,7 @@ async def admin_stats(callback: CallbackQuery) -> None:
 📊 <b>Статистика клуба:</b>
 
 👥 Пользователи: {user_stats['total']} (активных: {user_stats['active']})
+📈 Новых сегодня: {user_stats['new_today']}
 📚 Книг в библиотеке: {len(books)}
 📅 Событий: {event_stats['total']} (предстоящих: {event_stats['upcoming']})
     """
