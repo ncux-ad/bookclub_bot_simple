@@ -8,7 +8,7 @@
 import asyncio
 import logging
 from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # Загружаем переменные окружения
@@ -53,20 +53,19 @@ async def main() -> None:
     
     # Обработка ошибок
     @dp_instance.error()
-    async def error_handler(update, exception):
+    async def error_handler(exception: Exception):
         """
         Обработчик ошибок
         
         Логирует все ошибки, возникающие в процессе работы бота.
         
         Args:
-            update: Объект обновления от Telegram
             exception: Исключение, которое произошло
             
         Returns:
             None
         """
-        bot_logger.log_error(exception, f"update: {update}")
+        bot_logger.log_error(exception, "ошибка в обработчике")
         return True
     
     # Обработка graceful shutdown
