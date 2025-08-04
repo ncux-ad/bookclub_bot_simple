@@ -49,6 +49,9 @@ venv.bak/
 .DS_Store
 Thumbs.db
 
+# Портативный Calibre (может быть большим)
+calibre-portable/
+
 # Файлы книг (большие файлы)
 books/*.epub
 books/*.fb2

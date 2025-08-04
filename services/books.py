@@ -7,6 +7,7 @@
 
 from typing import Dict, Any, Optional, List
 from pathlib import Path
+from datetime import datetime
 
 from config import config
 from utils.data_manager import data_manager
@@ -30,7 +31,7 @@ class BookService:
         return data_manager.load_json(config.database.books_file)
     
     def add_book(self, title: str, author: str, description: str = "", 
-                 files: Dict[str, str] = None) -> bool:
+                 files: Dict[str, str] = None, metadata: Dict[str, Any] = None) -> bool:
         """Добавить новую книгу"""
         books = data_manager.load_json(config.database.books_file)
         
@@ -41,14 +42,27 @@ class BookService:
         book_data = {
             "title": title,
             "author": author,
-            "description": description
+            "description": description,
+            "added_at": datetime.now().isoformat()
         }
+        
+        # Добавляем метаданные если они есть
+        if metadata:
+            book_data.update(metadata)
         
         # Добавляем файлы если они есть
         if files:
             for format_type, file_path in files.items():
                 if format_type in ['epub', 'fb2', 'mobi']:
                     book_data[f'{format_type}_file'] = file_path
+        
+        # Добавляем поля для ссылок (пустые по умолчанию)
+        book_data.update({
+            "yandex_books_url": "",
+            "litres_url": "",
+            "audio_format": "",
+            "telegram_file_ids": {}
+        })
         
         if not data_manager.validate_book_data(book_data):
             self.logger.log_error(Exception("Ошибка валидации данных книги"), f"title: {title}")
