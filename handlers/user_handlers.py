@@ -440,7 +440,7 @@ async def cmd_help(message: Message) -> None:
     elif status == 'active':
         help_text += "\n📚 <b>Команды клуба:</b>\n"
         help_text += "/profile - Ваш профиль\n"
-        help_text += "/books - Список книг\n"
+        help_text += "/library - Библиотека книг\n"
         help_text += "/search - Поиск книг\n"
         help_text += "/schedule - Расписание событий\n"
         help_text += "/cancel - Отменить текущую операцию\n"
@@ -457,6 +457,7 @@ async def cmd_help(message: Message) -> None:
             help_text += "/setrole - Установить роль пользователю\n"
             help_text += "/addbook - Добавить новую книгу\n"
             help_text += "/uploadbook - Загрузить книгу из ZIP-архива\n"
+            help_text += "/editlinks - Редактировать ссылки на книги\n"
             help_text += "/checkcalibre - Проверить установку Calibre\n"
             help_text += "/ban - Заблокировать пользователя\n"
             help_text += "/unban - Разблокировать пользователя\n"

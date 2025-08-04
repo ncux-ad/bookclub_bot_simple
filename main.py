@@ -16,7 +16,7 @@ load_dotenv()
 
 from config import config
 from utils.logger import setup_logging, bot_logger
-from handlers import user_router, admin_router, book_router
+from handlers import user_router, admin_router, book_router, library_router, admin_book_router
 from handlers.unknown_handlers import router as unknown_router
 from utils.spam_middleware import SpamProtectionMiddleware
 
@@ -53,11 +53,15 @@ async def main() -> None:
     dp_instance.message.middleware(SpamProtectionMiddleware())
     dp_instance.callback_query.middleware(SpamProtectionMiddleware())
     
-    # Регистрация роутеров
+        # Регистрация роутеров
     # Сначала админские команды (более специфичные)
     dp_instance.include_router(admin_router)
     # Затем обработчики книг
     dp_instance.include_router(book_router)
+    # Затем обработчики библиотеки
+    dp_instance.include_router(library_router)
+    # Затем обработчики админского управления книгами
+    dp_instance.include_router(admin_book_router)
     # Затем пользовательские команды
     dp_instance.include_router(user_router)
     # В последнюю очередь обработчик неизвестных команд

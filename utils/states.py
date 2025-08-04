@@ -41,4 +41,11 @@ class BookManagementStates(StatesGroup):
     waiting_for_zip_file = State()
     waiting_for_yandex_url = State()
     waiting_for_litres_url = State()
+    waiting_for_audio_format = State()
+
+
+class BookLinkStates(StatesGroup):
+    """Состояния для редактирования ссылок на книги (админ)"""
+    waiting_for_yandex_url = State()
+    waiting_for_litres_url = State()
     waiting_for_audio_format = State() 
