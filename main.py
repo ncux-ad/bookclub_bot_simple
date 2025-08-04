@@ -18,6 +18,8 @@ from config import config
 from utils.logger import setup_logging, bot_logger
 from handlers import user_router, admin_router, book_router, library_router, admin_book_router
 from handlers.unknown_handlers import router as unknown_router
+from handlers.mailing_handlers import router as mailing_router
+from handlers.cancel_handlers import router as cancel_router
 from utils.spam_middleware import SpamProtectionMiddleware
 
 # Глобальные переменные для управления состоянием
@@ -54,8 +56,12 @@ async def main() -> None:
     dp_instance.callback_query.middleware(SpamProtectionMiddleware())
     
         # Регистрация роутеров
-    # Сначала админские команды (более специфичные)
+    # В первую очередь универсальные обработчики (cancel, validation)
+    dp_instance.include_router(cancel_router)
+    # Затем админские команды (более специфичные)
     dp_instance.include_router(admin_router)
+    # Затем роутер рассылки (админ)
+    dp_instance.include_router(mailing_router)
     # Затем обработчики книг
     dp_instance.include_router(book_router)
     # Затем обработчики библиотеки

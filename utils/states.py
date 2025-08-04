@@ -48,4 +48,9 @@ class BookLinkStates(StatesGroup):
     """Состояния для редактирования ссылок на книги (админ)"""
     waiting_for_yandex_url = State()
     waiting_for_litres_url = State()
-    waiting_for_audio_format = State() 
+    waiting_for_audio_format = State()
+
+
+class MailingStates(StatesGroup):
+    """Состояния для рассылки сообщений (админ)"""
+    waiting_for_text = State() 

@@ -15,6 +15,7 @@ from pathlib import Path
 from config import config
 from utils.logger import bot_logger
 from utils.access_control import admin_required
+from utils.validators import FSMValidators, ContentTypeValidator
 from services.books import book_service
 from utils.states import BookManagementStates
 from utils.fb2_parser import fb2_parser
@@ -112,7 +113,9 @@ async def cmd_uploadbook(message: Message, state: FSMContext) -> None:
 @router.message(StateFilter(BookManagementStates.waiting_for_book_title))
 async def process_book_title(message: Message, state: FSMContext) -> None:
     """
-    Обработка названия книги
+    Обработка названия книги с валидацией
+    
+    ИСПРАВЛЕНО: Добавлена валидация через FSMValidators
     
     Args:
         message (Message): Сообщение с названием книги
@@ -121,28 +124,24 @@ async def process_book_title(message: Message, state: FSMContext) -> None:
     Returns:
         None
     """
-    title = message.text.strip()
+    # НОВОЕ: Валидация через централизованную систему
+    validation_result = FSMValidators.validate_book_title(message.text)
     
-    if len(title) < 2:
+    if not validation_result.is_valid:
         await message.answer(
-            "❌ Название книги слишком короткое!\n"
-            "Минимум 2 символа. Попробуйте еще раз:"
+            f"{validation_result.error_message}\n\n"
+            "💡 Попробуйте еще раз или используйте /cancel для отмены."
         )
         return
     
-    if len(title) > 200:
-        await message.answer(
-            "❌ Название книги слишком длинное!\n"
-            "Максимум 200 символов. Попробуйте еще раз:"
-        )
-        return
+    title = validation_result.cleaned_value
     
     # Проверяем, не существует ли уже такая книга
     existing_book = book_service.get_book(title)
     if existing_book:
         await message.answer(
             f"❌ Книга <b>«{title}»</b> уже существует в библиотеке!\n\n"
-            "Введите другое название:",
+            "Введите другое название или используйте /cancel для отмены:",
             parse_mode="HTML"
         )
         return
@@ -161,7 +160,8 @@ async def process_book_title(message: Message, state: FSMContext) -> None:
         "📝 <b>Примеры:</b>\n"
         "• Лев Толстой\n"
         "• Фёдор Достоевский\n"
-        "• Михаил Булгаков",
+        "• Михаил Булгаков\n\n"
+        "❌ Для отмены используйте /cancel",
         reply_markup=keyboard,
         parse_mode="HTML"
     )

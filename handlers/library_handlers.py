@@ -16,46 +16,13 @@ import json
 from config import config
 from utils.logger import bot_logger
 from utils.access_control import active_user_required, admin_required
+from utils.callback_utils import safe_encode_title, safe_decode_title, CallbackPrefixes
 from services.books import book_service
 from services.users import user_service
 from utils.data_manager import data_manager
 import base64
 
 router = Router()
-
-
-import hashlib
-
-def safe_encode_title(title: str) -> str:
-    """
-    Безопасно кодирует название книги для использования в callback_data
-    
-    Args:
-        title (str): Название книги
-        
-    Returns:
-        str: Закодированное название
-    """
-    # Используем хеш названия для безопасного callback_data
-    return hashlib.md5(title.encode('utf-8')).hexdigest()[:16]
-
-
-def safe_decode_title(encoded_title: str) -> str:
-    """
-    Декодирует название книги из callback_data
-    
-    Args:
-        encoded_title (str): Закодированное название
-        
-    Returns:
-        str: Декодированное название
-    """
-    # Для хеша нам нужно найти оригинальное название по хешу
-    books = book_service.get_all_books()
-    for title in books.keys():
-        if safe_encode_title(title) == encoded_title:
-            return title
-    return encoded_title
 
 
 @router.message(Command("library"))

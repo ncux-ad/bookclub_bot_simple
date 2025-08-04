@@ -592,4 +592,35 @@ async def cmd_profile(message: Message) -> None:
 🏷️ Теги: {tags_display}
     """
     
-    await message.answer(profile_text, parse_mode="HTML", disable_web_page_preview=True) 
+    await message.answer(profile_text, parse_mode="HTML", disable_web_page_preview=True)
+
+
+# Обработчик /help во время FSM
+@router.message(StateFilter("*"), F.text == "/help")
+async def help_in_fsm(message: Message, state: FSMContext) -> None:
+    """
+    Справка во время FSM
+    
+    Показывает специальное сообщение, когда пользователь находится в режиме ввода данных.
+    
+    Args:
+        message (Message): Сообщение с командой помощи
+        state (FSMContext): Контекст FSM
+        
+    Returns:
+        None
+    """
+    current_state = await state.get_state()
+    
+    if current_state:
+        await message.answer(
+            "ℹ️ <b>Вы находитесь в режиме ввода данных</b>\n\n"
+            "Для получения справки сначала завершите текущую операцию:\n"
+            "• Введите требуемые данные\n"
+            "• Или используйте /cancel для отмены\n\n"
+            "После этого используйте /help",
+            parse_mode="HTML"
+        )
+    else:
+        # Если нет активного состояния, вызываем основной обработчик help
+        await cmd_help(message) 
